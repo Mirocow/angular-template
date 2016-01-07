@@ -48070,33 +48070,28 @@ var app = angular.module('App', [
 ]);
 
 app.config([
+  '$httpProvider',
   '$stateProvider',
   '$urlRouterProvider',
   'navItemsProvider',
-  function($stateProvider, $urlRouterProvider, navItemsProvider) {
-    //
-    // Выставляем стайт по умолчанию
-    $urlRouterProvider.otherwise('/');
+  function($httpProvider, $stateProvider, $urlRouterProvider, navItemsProvider) {
+
+    $urlRouterProvider
+
+    //.when('/c?id', '/contacts/:id')
+    //.when('/user/:id', '/contacts/:id')
 
     //
-    // Подключаем стайты для навигационного бара
-    /*var navItems = navItemsProvider.$get().items();
+    // Выставляем стейт по умолчанию
+    .otherwise('/home');
+
+    //
+    // Подключаем стейты для навигационного бара
+    var navItems = navItemsProvider.$get().items();
 
     angular.forEach(navItems, function (item) {
       $stateProvider.state(item.state, item);
-    });*/
-    $stateProvider
-      .state('state.home', {
-        url: '/',
-        controller: 'HomeController',
-        templateUrl: 'partials/home.ng.html',
-      })
-      .state('state.document', {
-        url: '/document/index',
-        controller: 'DocumetsController',
-        templateUrl: 'partials/document.ng.html',
-      })
-    ;
+    });
 
 }]);
 
@@ -48114,7 +48109,17 @@ app.config([
     $routeProvider.otherwise({
       redirectTo: '/'
     });
+
 }]);*/
+
+app.run([
+    '$rootScope',
+    function ($rootScope) {
+
+      console.log('App start');
+
+    }
+]);
 app.directive('navbar', [
     '$location',
     function ($location) {
@@ -48138,17 +48143,17 @@ app.factory('helloWorldFromFactory', function() {
 });
 app.factory('navItems', function(){
   return {
-    items: function(msg){
+    items: function(){
       return [
           {
-            state: 'state.home',
+            state: 'home',
             text: 'Home',
-            url: '/',
+            url: '/home',
             controller: 'HomeController',
             templateUrl: 'partials/home.ng.html',
           },
           {
-            state: 'state.document',
+            state: 'document',
             text: 'Documentation',
             url: '/document/index',
             controller: 'DocumetsController',

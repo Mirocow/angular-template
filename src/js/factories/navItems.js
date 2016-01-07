@@ -1,16 +1,16 @@
 app.factory('navItems', function(){
   return {
-    items: function(msg){
+    items: function(){
       return [
           {
-            state: 'state.home',
+            state: 'home',
             text: 'Home',
-            url: '/',
+            url: '/home',
             controller: 'HomeController',
             templateUrl: 'partials/home.ng.html',
           },
           {
-            state: 'state.document',
+            state: 'document',
             text: 'Documentation',
             url: '/document/index',
             controller: 'DocumetsController',

@@ -10,25 +10,33 @@ var app = angular.module('App', [
   'ngSanitize',
 ]);
 
-/*app.config([
+app.config([
+  '$httpProvider',
   '$stateProvider',
   '$urlRouterProvider',
   'navItemsProvider',
-  function($stateProvider, $urlRouterProvider, navItemsProvider) {
-    //
-    // Выставляем стайт по умолчанию
-    $urlRouterProvider.otherwise('/');
+  function($httpProvider, $stateProvider, $urlRouterProvider, navItemsProvider) {
+
+    $urlRouterProvider
+
+    //.when('/c?id', '/contacts/:id')
+    //.when('/user/:id', '/contacts/:id')
 
     //
-    // Подключаем стайты для навигационного бара
+    // Выставляем стейт по умолчанию
+    .otherwise('/home');
+
+    //
+    // Подключаем стейты для навигационного бара
     var navItems = navItemsProvider.$get().items();
 
     angular.forEach(navItems, function (item) {
       $stateProvider.state(item.state, item);
     });
-}]);*/
 
-app.config([
+}]);
+
+/*app.config([
   '$routeProvider',
   'navItemsProvider',
   function ($routeProvider, navItemsProvider) {
@@ -43,4 +51,13 @@ app.config([
       redirectTo: '/'
     });
 
-}]);
+}]);*/
+
+app.run([
+    '$rootScope',
+    function ($rootScope) {
+
+      console.log('App start');
+
+    }
+]);
