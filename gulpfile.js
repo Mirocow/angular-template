@@ -14,6 +14,7 @@ gulp.task('js', function () {
       'bower_components/angular-resource/angular-resource.js',
       'bower_components/angular-block-ui/dist/angular-block-ui.js',
       'bower_components/angular-sanitize/angular-sanitize.js',
+      'bower_components/angular-animate/angular-animate.js',
       'src/js/app.js',
       'src/js/directives/*.js',
       'src/js/factories/*.js',
@@ -21,7 +22,7 @@ gulp.task('js', function () {
       'src/js/services/*.js',
       'src/js/providers/*.js',
       'src/js/controllers/*.js',
-      //'src/js/**/*.js',
+      'src/states/**/*.js',
     ])
    .pipe(concat('app.js'))
    .pipe(ngAnnotate())
@@ -35,18 +36,31 @@ gulp.task('css', function () {
       'bower_components/bootstrap/dist/css/bootstrap.css',
       'bower_components/angular-block-ui/dist/angular-block-ui.css',
       'src/css/app.css',
+      'src/states/**/*.css',
     ])
     .pipe(concat("app.css"))
     .pipe(gulp.dest('./app/assets'))
 });
 
+gulp.task('html', function () {
+ gulp.src([
+    'src/states/**/*.html',
+ ])
+ .pipe(ngAnnotate())
+ .pipe(sourcemaps.write())
+ .pipe(gulp.dest('./app/partials/states'))
+});
+
 gulp.task('build', function () {
  gulp.run('css');
  gulp.run('js');
+ gulp.run('html');
 });
 
 gulp.task('watch', function () {
  gulp.watch('src/css/**/*.css');
  gulp.watch('src/js/app.js');
  gulp.watch('src/js/**/*.js');
+ gulp.watch('src/states/**/*.css');
+ gulp.watch('src/states/**/*.js');
 });

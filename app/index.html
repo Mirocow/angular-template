@@ -22,7 +22,11 @@
         <i>Some content will load here!</i>
     </ui-view>
 
-    <pre class="ng-binding"></pre>
+    <pre>
+      $state = {{$state.current.name}}
+      $stateParams = {{$stateParams}}
+      $state full url = {{ $state.$current.url.source }}
+    </pre>
 
     <script src="assets/app.js"></script>
 

@@ -8,8 +8,10 @@ var app = angular.module('App', [
   'ui.router',
   'blockUI',
   'ngSanitize',
+  'ngAnimate',
 ]);
 
+// ui.route
 app.config([
   '$httpProvider',
   '$stateProvider',
@@ -36,7 +38,9 @@ app.config([
 
 }]);
 
-/*app.config([
+/*
+// ngRoute
+app.config([
   '$routeProvider',
   'navItemsProvider',
   function ($routeProvider, navItemsProvider) {
@@ -50,12 +54,16 @@ app.config([
     $routeProvider.otherwise({
       redirectTo: '/'
     });
-
 }]);*/
 
 app.run([
     '$rootScope',
-    function ($rootScope) {
+    '$state',
+    '$stateParams',
+    function ($rootScope, $state, $stateParams) {
+
+      $rootScope.$state = $state;
+      $rootScope.$stateParams = $stateParams;
 
       console.log('App start');
 
