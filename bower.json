@@ -1,0 +1,20 @@
+{
+  "name": "test",
+  "description": "A starter project for AngularJS",
+  "version": "0.0.0",
+  "homepage": "",
+  "license": "MIT",
+  "private": true,
+  "dependencies": {
+    "angular": "1.4.x",
+    "jquery": "~2.1.4",
+    "angular-route": "1.4.x",
+    "ui-router": "~0.2.15",
+    "angular-resource": "1.4.x",
+    "bootstrap": "master",
+    "angular-bootstrap": "~0.14.3",
+    "angular-block-ui": "master",
+    "angular-sanitize": "~1",
+    "angular-animate": "~1.4.8"
+  }
+}
