@@ -7,7 +7,7 @@ var uglify = require('gulp-uglify');
 var ngAnnotate = require('gulp-ng-annotate');
 var browserSync = require('browser-sync').create();
 
-gulp.task('js', function () {
+gulp.task('vendors-js', function () {
  gulp.src([
       'bower_components/jquery/dist/jquery.js',
       'bower_components/bootstrap/dist/js/bootstrap.js',
@@ -26,6 +26,17 @@ gulp.task('js', function () {
       'bower_components/underscore/underscore.js',
       'bower_components/angular-bootstrap/ui-bootstrap.js',
       'bower_components/angular-bootstrap/ui-bootstrap-tpls.js',
+    ])
+   .pipe(ngAnnotate())
+   .pipe(concat('vendors.js'))
+   //.pipe(uglify())
+   .pipe(sourcemaps.write())
+   .pipe(gulp.dest('./app/assets'))
+   .pipe(browserSync.reload({stream: true}));
+});
+
+gulp.task('app-js', function () {
+ gulp.src([
       'src/js/app.js',
       'src/js/directives/*.js',
       'src/js/factories/*.js',
@@ -43,7 +54,12 @@ gulp.task('js', function () {
    .pipe(browserSync.reload({stream: true}));
 });
 
-gulp.task('css', function () {
+gulp.task('js', function () {
+  gulp.run('bootstrap-fonts');
+  gulp.run('vendors-js');
+});
+
+gulp.task('vendors-css', function () {
  gulp.src([
       'bower_components/bootstrap/dist/css/bootstrap.css',
       'bower_components/angular-bootstrap/ui-bootstrap-csp.css',
@@ -51,6 +67,16 @@ gulp.task('css', function () {
       'bower_components/angular-ui-grid/ui-grid.min.css',
       //'bower_components/angular-material/angular-material.layouts.min.css',
       //'bower_components/angular-material/angular-material.min.css',
+    ])
+    //.pipe(ngAnnotate())
+    .pipe($.replace('bower_components/bootstrap-sass-official/vendor/assets/fonts/bootstrap','./app/assets'))
+    .pipe(concat("vendors.css"))
+    .pipe(gulp.dest('./app/assets'))
+    .pipe(browserSync.reload({stream: true}));
+});
+
+gulp.task('app-css', function () {
+ gulp.src([
       'src/css/app.css',
       'src/states/**/*.css',
     ])
@@ -59,6 +85,11 @@ gulp.task('css', function () {
     .pipe(concat("app.css"))
     .pipe(gulp.dest('./app/assets'))
     .pipe(browserSync.reload({stream: true}));
+});
+
+gulp.task('css', function () {
+  gulp.run('vendors-css');
+  gulp.run('app-css');
 });
 
 gulp.task('docs', shell.task([
