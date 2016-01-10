@@ -29,7 +29,6 @@
     "underscore": "*",
     "angular-translate": "*",
     "fontawesome": "master",
-    "angular-aria": "master",
-    "angular-material": "master"
+    "angular-ui-grid": "master"
   }
 }

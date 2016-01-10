@@ -13,6 +13,9 @@ var app = angular.module('App', [
   'ngStorage',
   //'permission',
   'ui.bootstrap',
+  //'ngMaterial',
+  'ui.grid',
+  'ui.grid.edit'
 ]);
 
 // ui.route

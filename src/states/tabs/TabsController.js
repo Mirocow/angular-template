@@ -14,22 +14,39 @@ app.controller('TabsController', [
 
     $log.log('Init TabsController');
 
-      $scope.tabs = [
-        { title:'Dynamic Title 1', content:'Dynamic content 1' },
-        { title:'Dynamic Title 2', content:'Dynamic content 2', disabled: true }
-      ];
-
-      $scope.SwitchTab = function(){
-        blockUI.start("Loading...");
-
-        $timeout(function() {
-          blockUI.stop();
-        }, 2000);
-
+    $scope.gridOptions = {
+        columnDefs: [
+          {field: 'firstName', displayName: 'firstName'},
+          {field: 'lastName', displayName: 'lastName'},
+        ],
+        data: [
+            {
+                "firstName": "Cox",
+                "lastName": "Carney",
+            },
+            {
+                "firstName": "Lorraine",
+                "lastName": "Wise",
+            },
+            {
+                "firstName": "Nancy",
+                "lastName": "Waters",
+            }
+        ],
       };
 
-      $scope.model = {
-        name: 'Tabs'
-      };
+    $scope.switchTab = function(tab){
+
+      $scope[tab] = true;
+
+      var tableBlock = blockUI.instances.get('tableBlock');
+
+      tableBlock.start("Loading...");
+
+      $timeout(function() {
+        tableBlock.stop();
+      }, 2000);
+
+    };
 
 }]);

@@ -17,8 +17,8 @@ $ npm build
 
 ## Bower
 
-* https://github.com/angular/material
- * https://material.angularjs.org/HEAD/getting-started
+### used
+
 * https://github.com/angular-ui/ui-router
  * https://github.com/Narzerus/angular-permission
 * https://github.com/mgonto/restangular
@@ -31,6 +31,15 @@ $ npm build
  * https://angular-ui.github.io/
 * https://github.com/angular-ui/ui-validate
 * https://github.com/EugeneSnihovsky/angular-navbar
+* https://github.com/angular-ui/ui-grid
+ * http://ui-grid.info/docs/#/tutorial
+
+### not used
+
+* https://github.com/angular/material
+ * https://material.angularjs.org/HEAD/getting-started
+* http://angular-ui.github.io/
+* https://github.com/angular/bower-angular-aria
 
 ## Gulp
 
