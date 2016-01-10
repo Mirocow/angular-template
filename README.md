@@ -15,12 +15,22 @@ $ npm build
 
 # Use packages
 
+## Bower
+
+ * https://material.angularjs.org/HEAD/getting-started
+* https://github.com/angular-ui/ui-router
+ * https://github.com/Narzerus/angular-permission
 * https://github.com/mgonto/restangular
 * http://angular-ui.github.io/bootstrap/
  * https://github.com/angular-ui/bootstrap
-* http://angular-block-ui.nullest.com/#!/examples/documentation
 * http://underscorejs.ru/
 * https://github.com/McNull/angular-block-ui
+ * http://angular-block-ui.nullest.com/#!/examples/manual-blocking-examples
 * http://angular.ru/ui/
  * https://angular-ui.github.io/
 * https://github.com/angular-ui/ui-validate
+* https://github.com/EugeneSnihovsky/angular-navbar
+
+## Gulp
+
+* https://www.browsersync.io/docs

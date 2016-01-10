@@ -11,6 +11,8 @@ var app = angular.module('App', [
   'ngAnimate',
   'restangular',
   'ngStorage',
+  //'permission',
+  'ui.bootstrap',
 ]);
 
 // ui.route
@@ -34,6 +36,11 @@ app.config([
     // ui-route
     $stateProvider
 
+      .state('loading', {
+        url: '/loading',
+        template: 'Loading ...',
+      })
+
       .state('auth', {
         url: '/auth',
         abstract: true,
@@ -47,7 +54,9 @@ app.config([
         data: {
           'noLogin': true
         }
-      });
+      })
+
+      ;
 
     //
     // Подключаем стейты для навигационного бара
@@ -83,7 +92,8 @@ app.run([
     '$state',
     '$stateParams',
     'authService',
-    function ($log, $rootScope, $state, $stateParams, authService) {
+    'blockUI',
+    function ($log, $rootScope, $state, $stateParams, authService, blockUI) {
 
       $rootScope.$state = $state;
       $rootScope.$stateParams = $stateParams;
@@ -101,12 +111,16 @@ app.run([
       $rootScope.$on('$stateChangeStart',
         function (event, toState, toParams, fromState, fromParams) {
 
+          blockUI.start("Loading...");
+
           if(!isGoingToStateInStatesThatDontRequireAuth(toState.name) && !authService.isAuthenticated()){
             $log.log('Access is denied');
             event.preventDefault();
             $state.go('auth.login', {notify: false});
+            blockUI.stop();
           } else {
             $log.log('Access is allowed');
+            blockUI.stop();
           }
 
         }

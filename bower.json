@@ -16,6 +16,7 @@
     "jquery": "~2.1.4",
     "angular-route": "*",
     "ui-router": "~0.2.15",
+    "angular-permission": "~1.1.1",
     "ngstorage": "0.3.10",
     "angular-resource": "1.4.x",
     "bootstrap": "master",

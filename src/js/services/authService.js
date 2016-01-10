@@ -18,21 +18,13 @@ app.service('authService', [
         }
     });
 
-    var currentUser = $sessionStorage.$default({user: 'undefined'}).user;
-    var authenticated;
-    if(currentUser !== 'undefined')
-    {
-      authenticated = true;
-    } else {
-      authenticated = false;
-    }
+    var user = $sessionStorage.$default({user: null}).user;
 
     this.authenticate = function (name, password) {
         var promise = $timeout(function () {
-            var user = currentUser || 'undefined';
-            if (typeof userMap[name] !== 'undefined' && userMap[name]['password'] === password) {
-                authenticated = true;
-                $sessionStorage.user = userMap[name];
+            if (typeof userMap[name] !== null && userMap[name]['password'] === password) {
+                user = userMap[name];
+                $sessionStorage.user = user;
                 return user;
             } else {
                 delete $sessionStorage.user;
@@ -43,18 +35,16 @@ app.service('authService', [
     };
 
     this.isAuthenticated = function () {
-        return authenticated;
+        return user !== null || false;
     };
 
     this.getCurrentUser = function () {
-        if (authenticated) {
-            return currentUser;
-        }
+        return user;
     };
 
     this.logOut = function () {
-        authenticated = false;
-        currentUser = null;
+        delete $sessionStorage.user;
+        user = null;
     };
 
   }

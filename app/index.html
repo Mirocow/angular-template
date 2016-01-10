@@ -14,21 +14,22 @@
       </div>
     </header>
 
-    <!-- ngRoute -->
-    <div ng-view></div>
+    <div class="ng-scope">
 
-    <!-- ui-route -->
-    <ui-view>
-        <i>Some content will load here!</i>
-    </ui-view>
+      <div class="container ng-scope">
+        <ui-view></ui-view>
 
-    <br>
+        <br>
 
-    <pre>
-      $state = {{$state.current.name}}
-      $stateParams = {{$stateParams}}
-      $state full url = {{ $state.$current.url.source }}
-    </pre>
+        <pre>
+          $state = {{$state.current.name}}
+          $stateParams = {{$stateParams}}
+          $state full url = {{ $state.$current.url.source }}
+        </pre>
+
+      </div>
+
+    </div>
 
     <script src="assets/app.js"></script>
 

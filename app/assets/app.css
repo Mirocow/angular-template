@@ -6761,6 +6761,12 @@ button.close {
 }
 /*# sourceMappingURL=bootstrap.css.map */
 
+/* Include this file in your html if you are using the CSP mode. */
+
+.ng-animate.item:not(.left):not(.right) {
+  -webkit-transition: 0s ease-in-out left;
+  transition: 0s ease-in-out left
+}
 /*!
    angular-block-ui v0.2.1
    (c) 2015 (null) McNull https://github.com/McNull/angular-block-ui

@@ -1,0 +1,64 @@
+<style>
+  .nav-tabs > li > div {
+    margin-right: 2px;
+    line-height: 1.42857143;
+    border: 1px solid transparent;
+    border-radius: 4px 4px 0 0;
+  }
+
+  .nav-tabs > li > div:hover {
+    border-color: #eee #eee #ddd;
+  }
+
+  .nav-tabs > li.active > div, .nav-tabs > li.active > div:hover {
+    color: #555;
+    cursor: default;
+    background-color: #f8f8f8;
+    border: 1px solid #ddd;
+    border-bottom-color: transparent;
+  }
+
+  .nav > li > div {
+    position: relative;
+    display: block;
+    padding: 10px 15px;
+  }
+
+  .nav > li > div:hover {
+    background-color: #eee;
+  }
+
+  .uib-tab > div {
+    color: #337ab7;
+    cursor: pointer;
+  }
+
+  .nav-tabs > li.disabled > div {
+    color: #999;
+  }
+
+  .nav-tabs>li.disabled>div:hover, .nav-tabs>li.disabled>div:focus {
+    color: #999;
+    text-decoration: none;
+    background-color: transparent;
+    cursor: not-allowed;
+  }
+
+  form.tab-form-demo .tab-pane {
+    margin: 20px 20px;
+  }
+</style>
+
+<uib-tabset>
+  <uib-tab select="SwitchTab()" heading="Static title">Static content</uib-tab>
+  <uib-tab select="SwitchTab()" ng-repeat="tab in tabs" heading="{{tab.title}}" active="tab.active" disable="tab.disabled">
+    {{tab.content}}
+  </uib-tab>
+  <uib-tab select="alertMe(); SwitchTab()">
+    <uib-tab-heading>
+      <i class="glyphicon glyphicon-bell"></i> Alert!
+    </uib-tab-heading>
+    I've got an HTML heading, and a select callback. Pretty cool!
+  </uib-tab>
+</uib-tabset>
+

@@ -9,11 +9,12 @@ app.controller('AuthController', [
   '$routeParams',
   '$state',
   'authService',
-  function($log, $scope, $controller, $routeParams, $state, authService) {
+  '$window',
+  function($log, $scope, $controller, $routeParams, $state, authService, $window) {
 
     $log.log('Init AuthController');
 
-    $scope.user = $scope.user || {};
+    $scope.user = authService.getCurrentUser();
     $scope.loginForm = {submitDisabled: false};
     $scope.hint = true;
 
@@ -22,17 +23,23 @@ app.controller('AuthController', [
       $state.go('home');
     }
 
-    $scope.submit = function () {
-        $scope.loginForm.submitDisabled = true;
-        authService.authenticate($scope.user.name, $scope.user.password).then(function (user) {
-            $log.debug('success:', $scope.user);
-            $state.go('home');
-        }, function (reject) {
-            $log.debug('invalid credentials:', reject);
-            $scope.hint = true;
-        })['finally'](function () {
-            $scope.loginForm.submitDisabled = false;
-        });
+    $scope.submit = function (event) {
+      $scope.loginForm.submitDisabled = true;
+      authService.authenticate($scope.user.name, $scope.user.password).then(function (user) {
+          $log.debug('success:', $scope.user);
+          $state.go('home');
+      }, function (reject) {
+          $log.debug('invalid credentials:', reject);
+          $scope.hint = true;
+      })['finally'](function () {
+          $scope.loginForm.submitDisabled = false;
+      });
     };
+
+    $scope.logOut = function(event){
+      authService.logOut();
+      $state.go('home');
+      $state.reload();
+    }
 
 }]);

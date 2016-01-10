@@ -20,6 +20,8 @@ gulp.task('js', function () {
       'bower_components/angular-animate/angular-animate.js',
       'bower_components/restangular/dist/restangular.js',
       'bower_components/underscore/underscore.js',
+      'bower_components/angular-bootstrap/ui-bootstrap.js',
+      'bower_components/angular-bootstrap/ui-bootstrap-tpls.js',
       'src/js/app.js',
       'src/js/directives/*.js',
       'src/js/factories/*.js',
@@ -40,6 +42,7 @@ gulp.task('js', function () {
 gulp.task('css', function () {
  gulp.src([
       'bower_components/bootstrap/dist/css/bootstrap.css',
+      'bower_components/angular-bootstrap/ui-bootstrap-csp.css',
       'bower_components/angular-block-ui/dist/angular-block-ui.css',
       'src/css/app.css',
       'src/states/**/*.css',
