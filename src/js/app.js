@@ -22,7 +22,6 @@ var app = angular.module('App', [
   'ui.grid.resizeColumns',
   'ui.grid.moveColumns',
   'ui.grid.pinning',
-  'ui.bootstrap',
   'ui.grid.autoResize'
 ]);
 
