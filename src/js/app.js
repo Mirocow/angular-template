@@ -109,8 +109,6 @@ app.run([
       $rootScope.$stateParams = $stateParams;
       $rootScope.user = null;
 
-      var statesThatDontRequireAuth = ['auth.login'];
-
       var isGoingToStateInStatesThatDontRequireAuth = function (state) {
           return ['auth.login'].some(function (noAuthRoute) {
               return state === noAuthRoute;
