@@ -17,6 +17,7 @@ $ npm build
 
 ## Bower
 
+* https://github.com/angular/material
  * https://material.angularjs.org/HEAD/getting-started
 * https://github.com/angular-ui/ui-router
  * https://github.com/Narzerus/angular-permission

@@ -1,4 +1,5 @@
 var gulp = require('gulp');
+var $ = require('gulp-load-plugins')();
 var shell = require('gulp-shell');
 var concat = require('gulp-concat');
 var sourcemaps = require('gulp-sourcemaps');
@@ -11,6 +12,8 @@ gulp.task('js', function () {
       'bower_components/jquery/dist/jquery.js',
       'bower_components/bootstrap/dist/js/bootstrap.js',
       'bower_components/angular/angular.js',
+      'bower_components/angular-aria/angular-aria.js',
+      'bower_components/angular-material/angular-material.js',
       'bower_components/ngstorage/ngStorage.js',
       'bower_components/angular-route/angular-route.js',
       'bower_components/ui-router/release/angular-ui-router.js',
@@ -44,10 +47,13 @@ gulp.task('css', function () {
       'bower_components/bootstrap/dist/css/bootstrap.css',
       'bower_components/angular-bootstrap/ui-bootstrap-csp.css',
       'bower_components/angular-block-ui/dist/angular-block-ui.css',
+      'bower_components/angular-material/angular-material.layouts.min.css',
+      'bower_components/angular-material/angular-material.min.css',
       'src/css/app.css',
       'src/states/**/*.css',
     ])
     //.pipe(ngAnnotate())
+    .pipe($.replace('bower_components/bootstrap-sass-official/vendor/assets/fonts/bootstrap','./app/assets'))
     .pipe(concat("app.css"))
     .pipe(gulp.dest('./app/assets'))
     .pipe(browserSync.reload({stream: true}));
@@ -72,9 +78,18 @@ gulp.task('html', function () {
     .pipe(browserSync.reload({stream: true}));
 });
 
+gulp.task('fonts', function () {
+  gulp.src('bower_components/bootstrap/fonts/*')
+    .pipe($.filter('**/*.{eot,svg,ttf,woff,woff2}'))
+    .pipe($.flatten())
+    .pipe(gulp.dest('app/fonts'))
+    .pipe($.size());
+});
+
 gulp.task('build', function () {
   gulp.run('css');
   gulp.run('js');
+  gulp.run('fonts');
   gulp.run('html');
 });
 

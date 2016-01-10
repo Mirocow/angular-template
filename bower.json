@@ -28,6 +28,8 @@
     "restangular": "*",
     "underscore": "*",
     "angular-translate": "*",
-    "fontawesome": "master"
+    "fontawesome": "master",
+    "angular-aria": "master",
+    "angular-material": "master"
   }
 }
