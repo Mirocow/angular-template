@@ -59,14 +59,14 @@
   <uib-tab heading="Таблица 1" select="switchTab('tab2')">
     <div class="row">
       <div class="col-md-12" ng-if="tab2" block-ui="tableBlock">
-         <div id="grid1" class="grid" ui-grid="gridOptions" ui-grid-edit ui-grid-selection></div>
+         <div id="grid1" class="grid" ui-grid="grid1Options" ui-grid-edit></div>
       </div>
     </div>
   </uib-tab>
   <uib-tab heading="Таблица 2" select="switchTab('tab3')">
     <div class="row">
       <div class="col-md-12" ng-if="tab3" block-ui="tableBlock">
-         <div id="grid2" class="grid" ui-grid="gridOptions" ui-grid-edit ui-grid-selection></div>
+         <div id="grid2" class="grid" ui-grid="grid2Options" ui-grid-cellNav ui-grid-resize-columns ui-grid-move-columns ui-grid-pinning ui-grid-selection ui-grid-exporter ui-grid-auto-resize></div>
       </div>
     </div>
   </uib-tab>

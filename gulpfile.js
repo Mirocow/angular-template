@@ -80,12 +80,29 @@ gulp.task('html', function () {
     .pipe(browserSync.reload({stream: true}));
 });
 
-gulp.task('fonts', function () {
-  gulp.src('bower_components/bootstrap/fonts/*')
+gulp.task('bootstrap-fonts', function () {
+  gulp.src([
+    'bower_components/bootstrap/fonts/*',
+    ])
     .pipe($.filter('**/*.{eot,svg,ttf,woff,woff2}'))
     .pipe($.flatten())
     .pipe(gulp.dest('app/fonts'))
     .pipe($.size());
+});
+
+gulp.task('ui-grid-fonts', function () {
+  gulp.src([
+    'bower_components/angular-ui-grid/*',
+    ])
+    .pipe($.filter('**/*.{eot,svg,ttf,woff,woff2}'))
+    .pipe($.flatten())
+    .pipe(gulp.dest('app/assets'))
+    .pipe($.size());
+});
+
+gulp.task('fonts', function () {
+  gulp.run('bootstrap-fonts');
+  gulp.run('ui-grid-fonts');
 });
 
 gulp.task('build', function () {

@@ -15,7 +15,15 @@ var app = angular.module('App', [
   'ui.bootstrap',
   //'ngMaterial',
   'ui.grid',
-  'ui.grid.edit'
+  'ui.grid.edit',
+  'ui.grid.saveState',
+  'ui.grid.selection',
+  'ui.grid.cellNav',
+  'ui.grid.resizeColumns',
+  'ui.grid.moveColumns',
+  'ui.grid.pinning',
+  'ui.bootstrap',
+  'ui.grid.autoResize'
 ]);
 
 // ui.route

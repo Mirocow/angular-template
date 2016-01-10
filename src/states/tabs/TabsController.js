@@ -14,7 +14,7 @@ app.controller('TabsController', [
 
     $log.log('Init TabsController');
 
-    $scope.gridOptions = {
+    $scope.grid1Options = {
         columnDefs: [
           {field: 'firstName', displayName: 'firstName'},
           {field: 'lastName', displayName: 'lastName'},
@@ -31,6 +31,31 @@ app.controller('TabsController', [
             {
                 "firstName": "Nancy",
                 "lastName": "Waters",
+            }
+        ],
+      };
+
+    $scope.grid2Options = {
+        columnDefs: [
+          {field: 'firstName', displayName: 'firstName'},
+          {field: 'lastName', displayName: 'lastName'},
+          {field: 'test', displayName: 'Test'},
+        ],
+        data: [
+            {
+                "firstName": "Cox",
+                "lastName": "Carney",
+                test: false,
+            },
+            {
+                "firstName": "Lorraine",
+                "lastName": "Wise",
+                test: false,
+            },
+            {
+                "firstName": "Nancy",
+                "lastName": "Waters",
+                test: true,
             }
         ],
       };
