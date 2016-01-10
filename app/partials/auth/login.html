@@ -1,0 +1,15 @@
+<div class="login" ng-controller="AuthController">
+    <form ng-submit="submit()" name="loginForm" novalidate>
+
+        <p ng-show="hint">admin has a very secret password :)</p>
+
+        <span class="fontawesome-user"></span>
+        <input type="text" placeholder="Username" name="userName" ng-model="user.name" required />
+
+        <span class="fontawesome-lock"></span>
+        <input type="password" placeholder="Password" name="userPassword" ng-model="user.password" required />
+
+        <input type="submit" value="log in" ng-disabled="loginForm.submitDisabled"/>
+
+    </form>
+</div>

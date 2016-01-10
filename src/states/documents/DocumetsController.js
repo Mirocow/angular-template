@@ -3,10 +3,12 @@
 /* Controller DocumetsController */
 
 app.controller('DocumetsController', [
+  '$log',
   '$scope',
+  '$controller',
   '$routeParams',
-  function($scope, $routeParams) {
+  function($log, $scope, $controller, $routeParams) {
 
-    console.log('Init DocumetsController');
+    $log.log('Init DocumetsController');
 
 }]);

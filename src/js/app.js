@@ -9,6 +9,8 @@ var app = angular.module('App', [
   'blockUI',
   'ngSanitize',
   'ngAnimate',
+  'restangular',
+  'ngStorage',
 ]);
 
 // ui.route
@@ -17,16 +19,35 @@ app.config([
   '$stateProvider',
   '$urlRouterProvider',
   'navItemsProvider',
-  function($httpProvider, $stateProvider, $urlRouterProvider, navItemsProvider) {
+  'RestangularProvider',
+  '$compileProvider',
+  function($httpProvider, $stateProvider, $urlRouterProvider, navItemsProvider, RestangularProvider, $compileProvider) {
 
+    $compileProvider.debugInfoEnabled(false);
+
+    // ngRoute
     $urlRouterProvider
+      //
+      // Выставляем стейт по умолчанию
+      .otherwise('/home');
 
-    //.when('/c?id', '/contacts/:id')
-    //.when('/user/:id', '/contacts/:id')
+    // ui-route
+    $stateProvider
 
-    //
-    // Выставляем стейт по умолчанию
-    .otherwise('/home');
+      .state('auth', {
+        url: '/auth',
+        abstract: true,
+        template: '<ui-view>',
+        controller: 'AuthController',
+      })
+
+      .state('auth.login', {
+        url: '/login',
+        templateUrl: './partials/auth/login.html',
+        data: {
+          'noLogin': true
+        }
+      });
 
     //
     // Подключаем стейты для навигационного бара
@@ -36,36 +57,62 @@ app.config([
       $stateProvider.state(item.state, item);
     });
 
+    RestangularProvider.setBaseUrl("http://localhost:8000");
+
+    /*RestangularConfigurer.addFullRequestInterceptor(function (element, operation, route, url, headers, params, httpConfig) {
+
+        if (operation === 'get'){
+            $log.warn("RestangularProvider: call to get");
+            params.ts= new Date();
+        }
+
+        return {
+            element: element,
+            headers: headers,
+            params: params,
+            httpConfig: httpConfig
+        };
+
+      });*/
+
 }]);
 
-/*
-// ngRoute
-app.config([
-  '$routeProvider',
-  'navItemsProvider',
-  function ($routeProvider, navItemsProvider) {
-
-    var navItems = navItemsProvider.$get().items();
-
-    angular.forEach(navItems, function (item) {
-      $routeProvider.when(item.url, item);
-    });
-
-    $routeProvider.otherwise({
-      redirectTo: '/'
-    });
-}]);*/
-
 app.run([
+    '$log',
     '$rootScope',
     '$state',
     '$stateParams',
-    function ($rootScope, $state, $stateParams) {
+    'authService',
+    function ($log, $rootScope, $state, $stateParams, authService) {
 
       $rootScope.$state = $state;
       $rootScope.$stateParams = $stateParams;
+      $rootScope.user = null;
 
-      console.log('App start');
+      var statesThatDontRequireAuth = ['auth.login'];
+
+      var isGoingToStateInStatesThatDontRequireAuth = function (state) {
+          return ['auth.login'].some(function (noAuthRoute) {
+              return state === noAuthRoute;
+          });
+      };
+
+      // Проверяем авторизацию
+      $rootScope.$on('$stateChangeStart',
+        function (event, toState, toParams, fromState, fromParams) {
+
+          if(!isGoingToStateInStatesThatDontRequireAuth(toState.name) && !authService.isAuthenticated()){
+            $log.log('Access is denied');
+            event.preventDefault();
+            $state.go('auth.login', {notify: false});
+          } else {
+            $log.log('Access is allowed');
+          }
+
+        }
+      );
+
+      $log.log('App start');
 
     }
 ]);

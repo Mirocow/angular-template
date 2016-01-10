@@ -3,9 +3,12 @@
 /* Controller HomeController */
 
 app.controller('HomeController', [
+  '$log',
   '$scope',
-  function($scope) {
+  '$controller',
+  '$routeParams',
+  function($log, $scope, $controller, $routeParams) {
 
-    console.log('Init HomeController');
+    $log.log('Init HomeController');
 
 }]);

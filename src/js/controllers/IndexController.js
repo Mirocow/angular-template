@@ -3,19 +3,24 @@
 /* Controller IndexController */
 
 app.controller('IndexController', [
+  '$log',
   '$scope',
+  '$controller',
+  '$routeParams',
   'helloWorld',
   'helloWorldFromFactory',
   'helloWorldFromService',
-  function($scope, helloWorld, helloWorldFromFactory, helloWorldFromService) {
+  function($log, $scope, $controller, $routeParams, helloWorld, helloWorldFromFactory, helloWorldFromService) {
 
-    console.log('Init IndexController');
+    angular.extend(this, $controller('AuthController', {$scope: $scope, $routeParams: $routeParams}));
+
+    $log.log('Init IndexController');
 
     $scope.hellos = [
         helloWorld.sayHello(),
         helloWorldFromFactory.sayHello(),
         helloWorldFromService.sayHello()];
 
-    console.log($scope.hellos);
+    $log.log($scope.hellos);
 
 }]);

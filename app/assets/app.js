@@ -40593,6 +40593,228 @@ $provide.value("$locale", {
 })(window, document);
 
 !window.angular.$$csp().noInlineStyle && window.angular.element(document.head).prepend('<style type="text/css">@charset "UTF-8";[ng\\:cloak],[ng-cloak],[data-ng-cloak],[x-ng-cloak],.ng-cloak,.x-ng-cloak,.ng-hide:not(.ng-hide-animate){display:none !important;}ng\\:form{display:block;}.ng-animate-shim{visibility:hidden;}.ng-anchor{position:absolute;}</style>');
+(function (root, factory) {
+  'use strict';
+
+  if (typeof define === 'function' && define.amd) {
+    define(['angular'], factory);
+  } else if (root.hasOwnProperty('angular')) {
+    // Browser globals (root is window), we don't register it.
+    factory(root.angular);
+  } else if (typeof exports === 'object') {
+    module.exports = factory(require('angular'));
+  }
+}(this , function (angular) {
+    'use strict';
+
+    // In cases where Angular does not get passed or angular is a truthy value
+    // but misses .module we can fall back to using window.
+    angular = (angular && angular.module ) ? angular : window.angular;
+
+    /**
+     * @ngdoc overview
+     * @name ngStorage
+     */
+
+    return angular.module('ngStorage', [])
+
+    /**
+     * @ngdoc object
+     * @name ngStorage.$localStorage
+     * @requires $rootScope
+     * @requires $window
+     */
+
+    .provider('$localStorage', _storageProvider('localStorage'))
+
+    /**
+     * @ngdoc object
+     * @name ngStorage.$sessionStorage
+     * @requires $rootScope
+     * @requires $window
+     */
+
+    .provider('$sessionStorage', _storageProvider('sessionStorage'));
+
+    function _storageProvider(storageType) {
+        return function () {
+          var storageKeyPrefix = 'ngStorage-';
+
+          this.setKeyPrefix = function (prefix) {
+            if (typeof prefix !== 'string') {
+              throw new TypeError('[ngStorage] - ' + storageType + 'Provider.setKeyPrefix() expects a String.');
+            }
+            storageKeyPrefix = prefix;
+          };
+
+          var serializer = angular.toJson;
+          var deserializer = angular.fromJson;
+
+          this.setSerializer = function (s) {
+            if (typeof s !== 'function') {
+              throw new TypeError('[ngStorage] - ' + storageType + 'Provider.setSerializer expects a function.');
+            }
+
+            serializer = s;
+          };
+
+          this.setDeserializer = function (d) {
+            if (typeof d !== 'function') {
+              throw new TypeError('[ngStorage] - ' + storageType + 'Provider.setDeserializer expects a function.');
+            }
+
+            deserializer = d;
+          };
+
+          // Note: This is not very elegant at all.
+          this.get = function (key) {
+            return deserializer(window[storageType].getItem(storageKeyPrefix + key));
+          };
+
+          // Note: This is not very elegant at all.
+          this.set = function (key, value) {
+            return window[storageType].setItem(storageKeyPrefix + key, serializer(value));
+          };
+
+          this.$get = [
+              '$rootScope',
+              '$window',
+              '$log',
+              '$timeout',
+              '$document',
+
+              function(
+                  $rootScope,
+                  $window,
+                  $log,
+                  $timeout,
+                  $document
+              ){
+                function isStorageSupported(storageType) {
+
+                    // Some installations of IE, for an unknown reason, throw "SCRIPT5: Error: Access is denied"
+                    // when accessing window.localStorage. This happens before you try to do anything with it. Catch
+                    // that error and allow execution to continue.
+
+                    // fix 'SecurityError: DOM Exception 18' exception in Desktop Safari, Mobile Safari
+                    // when "Block cookies": "Always block" is turned on
+                    var supported;
+                    try {
+                        supported = $window[storageType];
+                    }
+                    catch (err) {
+                        supported = false;
+                    }
+
+                    // When Safari (OS X or iOS) is in private browsing mode, it appears as though localStorage
+                    // is available, but trying to call .setItem throws an exception below:
+                    // "QUOTA_EXCEEDED_ERR: DOM Exception 22: An attempt was made to add something to storage that exceeded the quota."
+                    if (supported && storageType === 'localStorage') {
+                        var key = '__' + Math.round(Math.random() * 1e7);
+
+                        try {
+                            localStorage.setItem(key, key);
+                            localStorage.removeItem(key);
+                        }
+                        catch (err) {
+                            supported = false;
+                        }
+                    }
+
+                    return supported;
+                }
+
+                // The magic number 10 is used which only works for some keyPrefixes...
+                // See https://github.com/gsklee/ngStorage/issues/137
+                var prefixLength = storageKeyPrefix.length;
+
+                // #9: Assign a placeholder object if Web Storage is unavailable to prevent breaking the entire AngularJS app
+                var webStorage = isStorageSupported(storageType) || ($log.warn('This browser does not support Web Storage!'), {setItem: angular.noop, getItem: angular.noop, removeItem: angular.noop}),
+                    $storage = {
+                        $default: function(items) {
+                            for (var k in items) {
+                                angular.isDefined($storage[k]) || ($storage[k] = angular.copy(items[k]) );
+                            }
+
+                            $storage.$sync();
+                            return $storage;
+                        },
+                        $reset: function(items) {
+                            for (var k in $storage) {
+                                '$' === k[0] || (delete $storage[k] && webStorage.removeItem(storageKeyPrefix + k));
+                            }
+
+                            return $storage.$default(items);
+                        },
+                        $sync: function () {
+                            for (var i = 0, l = webStorage.length, k; i < l; i++) {
+                                // #8, #10: `webStorage.key(i)` may be an empty string (or throw an exception in IE9 if `webStorage` is empty)
+                                (k = webStorage.key(i)) && storageKeyPrefix === k.slice(0, prefixLength) && ($storage[k.slice(prefixLength)] = deserializer(webStorage.getItem(k)));
+                            }
+                        },
+                        $apply: function() {
+                            var temp$storage;
+
+                            _debounce = null;
+
+                            if (!angular.equals($storage, _last$storage)) {
+                                temp$storage = angular.copy(_last$storage);
+                                angular.forEach($storage, function(v, k) {
+                                    if (angular.isDefined(v) && '$' !== k[0]) {
+                                        webStorage.setItem(storageKeyPrefix + k, serializer(v));
+                                        delete temp$storage[k];
+                                    }
+                                });
+
+                                for (var k in temp$storage) {
+                                    webStorage.removeItem(storageKeyPrefix + k);
+                                }
+
+                                _last$storage = angular.copy($storage);
+                            }
+                        }
+                    },
+                    _last$storage,
+                    _debounce;
+
+                $storage.$sync();
+
+                _last$storage = angular.copy($storage);
+
+                $rootScope.$watch(function() {
+                    _debounce || (_debounce = $timeout($storage.$apply, 100, false));
+                });
+
+                // #6: Use `$window.addEventListener` instead of `angular.element` to avoid the jQuery-specific `event.originalEvent`
+                $window.addEventListener && $window.addEventListener('storage', function(event) {
+                    if (!event.key) {
+                      return;
+                    }
+
+                    // Reference doc.
+                    var doc = $document[0];
+
+                    if ( (!doc.hasFocus || !doc.hasFocus()) && storageKeyPrefix === event.key.slice(0, prefixLength) ) {
+                        event.newValue ? $storage[event.key.slice(prefixLength)] = deserializer(event.newValue) : delete $storage[event.key.slice(prefixLength)];
+
+                        _last$storage = angular.copy($storage);
+
+                        $rootScope.$apply();
+                    }
+                });
+
+                $window.addEventListener && $window.addEventListener('beforeunload', function() {
+                    $storage.$apply();
+                });
+
+                return $storage;
+              }
+          ];
+      };
+    }
+
+}));
+
 /**
  * @license AngularJS v1.4.8
  * (c) 2010-2015 Google, Inc. http://angularjs.org
@@ -51988,6 +52210,2911 @@ angular.module('ngAnimate', [])
 
 })(window, window.angular);
 
+/**
+ * Restful Resources service for AngularJS apps
+ * @version v1.4.0 - 2015-04-03 * @link https://github.com/mgonto/restangular
+ * @author Martin Gontovnikas <martin@gon.to>
+ * @license MIT License, http://www.opensource.org/licenses/MIT
+ */(function() {
+
+var restangular = angular.module('restangular', []);
+
+restangular.provider('Restangular', function() {
+  // Configuration
+  var Configurer = {};
+  Configurer.init = function(object, config) {
+    object.configuration = config;
+
+    /**
+     * Those are HTTP safe methods for which there is no need to pass any data with the request.
+     */
+    var safeMethods= ['get', 'head', 'options', 'trace', 'getlist'];
+    config.isSafe = function(operation) {
+      return _.contains(safeMethods, operation.toLowerCase());
+    };
+
+    var absolutePattern = /^https?:\/\//i;
+    config.isAbsoluteUrl = function(string) {
+      return _.isUndefined(config.absoluteUrl) || _.isNull(config.absoluteUrl) ?
+              string && absolutePattern.test(string) :
+              config.absoluteUrl;
+    };
+
+    config.absoluteUrl = _.isUndefined(config.absoluteUrl) ? true : config.absoluteUrl;
+    object.setSelfLinkAbsoluteUrl = function(value) {
+      config.absoluteUrl = value;
+    };
+    /**
+     * This is the BaseURL to be used with Restangular
+     */
+    config.baseUrl = _.isUndefined(config.baseUrl) ? '' : config.baseUrl;
+    object.setBaseUrl = function(newBaseUrl) {
+      config.baseUrl = /\/$/.test(newBaseUrl) ?
+        newBaseUrl.substring(0, newBaseUrl.length-1) :
+        newBaseUrl;
+      return this;
+    };
+
+    /**
+     * Sets the extra fields to keep from the parents
+     */
+    config.extraFields = config.extraFields || [];
+    object.setExtraFields = function(newExtraFields) {
+      config.extraFields = newExtraFields;
+      return this;
+    };
+
+    /**
+     * Some default $http parameter to be used in EVERY call
+    **/
+    config.defaultHttpFields = config.defaultHttpFields || {};
+    object.setDefaultHttpFields = function(values) {
+      config.defaultHttpFields = values;
+      return this;
+    };
+
+    config.withHttpValues = function(httpLocalConfig, obj) {
+      return _.defaults(obj, httpLocalConfig, config.defaultHttpFields);
+    };
+
+    config.encodeIds = _.isUndefined(config.encodeIds) ? true : config.encodeIds;
+    object.setEncodeIds = function(encode) {
+      config.encodeIds = encode;
+    };
+
+    config.defaultRequestParams = config.defaultRequestParams || {
+      get: {},
+      post: {},
+      put: {},
+      remove: {},
+      common: {}
+    };
+
+    object.setDefaultRequestParams = function(param1, param2) {
+      var methods = [],
+          params = param2 || param1;
+      if (!_.isUndefined(param2)) {
+        if (_.isArray(param1)) {
+          methods = param1;
+        } else {
+          methods.push(param1);
+        }
+      } else {
+        methods.push('common');
+      }
+
+      _.each(methods, function (method) {
+        config.defaultRequestParams[method] = params;
+      });
+      return this;
+    };
+
+    object.requestParams = config.defaultRequestParams;
+
+    config.defaultHeaders = config.defaultHeaders || {};
+    object.setDefaultHeaders = function(headers) {
+      config.defaultHeaders = headers;
+      object.defaultHeaders = config.defaultHeaders;
+      return this;
+    };
+
+    object.defaultHeaders = config.defaultHeaders;
+
+    /**
+     * Method overriders will set which methods are sent via POST with an X-HTTP-Method-Override
+     **/
+    config.methodOverriders = config.methodOverriders || [];
+    object.setMethodOverriders = function(values) {
+      var overriders = _.extend([], values);
+      if (config.isOverridenMethod('delete', overriders)) {
+        overriders.push('remove');
+      }
+      config.methodOverriders = overriders;
+      return this;
+    };
+
+    config.jsonp = _.isUndefined(config.jsonp) ? false : config.jsonp;
+    object.setJsonp = function(active) {
+      config.jsonp = active;
+    };
+
+    config.isOverridenMethod = function(method, values) {
+      var search = values || config.methodOverriders;
+      return !_.isUndefined(_.find(search, function(one) {
+        return one.toLowerCase() === method.toLowerCase();
+      }));
+    };
+
+    /**
+     * Sets the URL creator type. For now, only Path is created. In the future we'll have queryParams
+    **/
+    config.urlCreator = config.urlCreator || 'path';
+    object.setUrlCreator = function(name) {
+      if (!_.has(config.urlCreatorFactory, name)) {
+        throw new Error('URL Path selected isn\'t valid');
+      }
+
+      config.urlCreator = name;
+      return this;
+    };
+
+    /**
+     * You can set the restangular fields here. The 3 required fields for Restangular are:
+     *
+     * id: Id of the element
+     * route: name of the route of this element
+     * parentResource: the reference to the parent resource
+     *
+     *  All of this fields except for id, are handled (and created) by Restangular. By default,
+     *  the field values will be id, route and parentResource respectively
+     */
+    config.restangularFields = config.restangularFields || {
+      id: 'id',
+      route: 'route',
+      parentResource: 'parentResource',
+      restangularCollection: 'restangularCollection',
+      cannonicalId: '__cannonicalId',
+      etag: 'restangularEtag',
+      selfLink: 'href',
+      get: 'get',
+      getList: 'getList',
+      put: 'put',
+      post: 'post',
+      remove: 'remove',
+      head: 'head',
+      trace: 'trace',
+      options: 'options',
+      patch: 'patch',
+      getRestangularUrl: 'getRestangularUrl',
+      getRequestedUrl: 'getRequestedUrl',
+      putElement: 'putElement',
+      addRestangularMethod: 'addRestangularMethod',
+      getParentList: 'getParentList',
+      clone: 'clone',
+      ids: 'ids',
+      httpConfig: '_$httpConfig',
+      reqParams: 'reqParams',
+      one: 'one',
+      all: 'all',
+      several: 'several',
+      oneUrl: 'oneUrl',
+      allUrl: 'allUrl',
+      customPUT: 'customPUT',
+      customPOST: 'customPOST',
+      customDELETE: 'customDELETE',
+      customGET: 'customGET',
+      customGETLIST: 'customGETLIST',
+      customOperation: 'customOperation',
+      doPUT: 'doPUT',
+      doPOST: 'doPOST',
+      doDELETE: 'doDELETE',
+      doGET: 'doGET',
+      doGETLIST: 'doGETLIST',
+      fromServer: 'fromServer',
+      withConfig: 'withConfig',
+      withHttpConfig: 'withHttpConfig',
+      singleOne: 'singleOne',
+      plain: 'plain',
+      save: 'save',
+      restangularized: 'restangularized'
+    };
+    object.setRestangularFields = function(resFields) {
+      config.restangularFields =
+        _.extend(config.restangularFields, resFields);
+      return this;
+    };
+
+    config.isRestangularized = function(obj) {
+      return !!obj[config.restangularFields.restangularized];
+    };
+
+    config.setFieldToElem = function(field, elem, value) {
+      var properties = field.split('.');
+      var idValue = elem;
+      _.each(_.initial(properties), function(prop) {
+        idValue[prop] = {};
+        idValue = idValue[prop];
+      });
+      idValue[_.last(properties)] = value;
+      return this;
+    };
+
+    config.getFieldFromElem = function(field, elem) {
+      var properties = field.split('.');
+      var idValue = elem;
+      _.each(properties, function(prop) {
+        if (idValue) {
+          idValue = idValue[prop];
+        }
+      });
+      return angular.copy(idValue);
+    };
+
+    config.setIdToElem = function(elem, id /*, route */) {
+      config.setFieldToElem(config.restangularFields.id, elem, id);
+      return this;
+    };
+
+    config.getIdFromElem = function(elem) {
+      return config.getFieldFromElem(config.restangularFields.id, elem);
+    };
+
+    config.isValidId = function(elemId) {
+      return '' !== elemId && !_.isUndefined(elemId) && !_.isNull(elemId);
+    };
+
+    config.setUrlToElem = function(elem, url /*, route */) {
+      config.setFieldToElem(config.restangularFields.selfLink, elem, url);
+      return this;
+    };
+
+    config.getUrlFromElem = function(elem) {
+      return config.getFieldFromElem(config.restangularFields.selfLink, elem);
+    };
+
+    config.useCannonicalId = _.isUndefined(config.useCannonicalId) ? false : config.useCannonicalId;
+    object.setUseCannonicalId = function(value) {
+      config.useCannonicalId = value;
+      return this;
+    };
+
+    config.getCannonicalIdFromElem = function(elem) {
+      var cannonicalId = elem[config.restangularFields.cannonicalId];
+      var actualId = config.isValidId(cannonicalId) ? cannonicalId : config.getIdFromElem(elem);
+      return actualId;
+    };
+
+    /**
+     * Sets the Response parser. This is used in case your response isn't directly the data.
+     * For example if you have a response like {meta: {'meta'}, data: {name: 'Gonto'}}
+     * you can extract this data which is the one that needs wrapping
+     *
+     * The ResponseExtractor is a function that receives the response and the method executed.
+     */
+
+    config.responseInterceptors = config.responseInterceptors || [];
+
+    config.defaultResponseInterceptor = function(data /*, operation, what, url, response, deferred */) {
+      return data;
+    };
+
+    config.responseExtractor = function(data, operation, what, url, response, deferred) {
+      var interceptors = angular.copy(config.responseInterceptors);
+      interceptors.push(config.defaultResponseInterceptor);
+      var theData = data;
+      _.each(interceptors, function(interceptor) {
+        theData = interceptor(theData, operation,
+          what, url, response, deferred);
+      });
+      return theData;
+    };
+
+    object.addResponseInterceptor = function(extractor) {
+      config.responseInterceptors.push(extractor);
+      return this;
+    };
+
+    config.errorInterceptors = config.errorInterceptors || [];
+    object.addErrorInterceptor = function(interceptor) {
+      config.errorInterceptors.push(interceptor);
+      return this;
+    };
+
+    object.setResponseInterceptor = object.addResponseInterceptor;
+    object.setResponseExtractor = object.addResponseInterceptor;
+    object.setErrorInterceptor = object.addErrorInterceptor;
+
+    /**
+     * Response interceptor is called just before resolving promises.
+     */
+
+
+    /**
+     * Request interceptor is called before sending an object to the server.
+     */
+    config.requestInterceptors = config.requestInterceptors || [];
+
+    config.defaultInterceptor = function(element, operation, path, url, headers, params, httpConfig) {
+      return {
+        element: element,
+        headers: headers,
+        params: params,
+        httpConfig: httpConfig
+      };
+    };
+
+    config.fullRequestInterceptor = function(element, operation, path, url, headers, params, httpConfig) {
+      var interceptors = angular.copy(config.requestInterceptors);
+      var defaultRequest = config.defaultInterceptor(element, operation, path, url, headers, params, httpConfig);
+      return _.reduce(interceptors, function(request, interceptor) {
+        return _.extend(request, interceptor(request.element, operation,
+          path, url, request.headers, request.params, request.httpConfig));
+      }, defaultRequest);
+    };
+
+    object.addRequestInterceptor = function(interceptor) {
+      config.requestInterceptors.push(function(elem, operation, path, url, headers, params, httpConfig) {
+        return {
+          headers: headers,
+          params: params,
+          element: interceptor(elem, operation, path, url),
+          httpConfig: httpConfig
+        };
+      });
+      return this;
+    };
+
+    object.setRequestInterceptor = object.addRequestInterceptor;
+
+    object.addFullRequestInterceptor = function(interceptor) {
+      config.requestInterceptors.push(interceptor);
+      return this;
+    };
+
+    object.setFullRequestInterceptor = object.addFullRequestInterceptor;
+
+    config.onBeforeElemRestangularized = config.onBeforeElemRestangularized || function(elem) {
+      return elem;
+    };
+    object.setOnBeforeElemRestangularized = function(post) {
+      config.onBeforeElemRestangularized = post;
+      return this;
+    };
+
+    object.setRestangularizePromiseInterceptor = function(interceptor) {
+      config.restangularizePromiseInterceptor = interceptor;
+      return this;
+    };
+
+    /**
+     * This method is called after an element has been "Restangularized".
+     *
+     * It receives the element, a boolean indicating if it's an element or a collection
+     * and the name of the model
+     *
+     */
+    config.onElemRestangularized = config.onElemRestangularized || function(elem) {
+      return elem;
+    };
+    object.setOnElemRestangularized = function(post) {
+      config.onElemRestangularized = post;
+      return this;
+    };
+
+    config.shouldSaveParent = config.shouldSaveParent || function() {
+      return true;
+    };
+    object.setParentless = function(values) {
+      if (_.isArray(values)) {
+        config.shouldSaveParent = function(route) {
+          return !_.contains(values, route);
+        };
+      } else if (_.isBoolean(values)) {
+        config.shouldSaveParent = function() {
+          return !values;
+        };
+      }
+      return this;
+    };
+
+    /**
+     * This lets you set a suffix to every request.
+     *
+     * For example, if your api requires that for JSon requests you do /users/123.json, you can set that
+     * in here.
+     *
+     *
+     * By default, the suffix is null
+     */
+    config.suffix = _.isUndefined(config.suffix) ? null : config.suffix;
+    object.setRequestSuffix = function(newSuffix) {
+      config.suffix = newSuffix;
+      return this;
+    };
+
+    /**
+     * Add element transformers for certain routes.
+     */
+    config.transformers = config.transformers || {};
+    object.addElementTransformer = function(type, secondArg, thirdArg) {
+      var isCollection = null;
+      var transformer = null;
+      if (arguments.length === 2) {
+        transformer = secondArg;
+      } else {
+        transformer = thirdArg;
+        isCollection = secondArg;
+      }
+
+      var typeTransformers = config.transformers[type];
+      if (!typeTransformers) {
+        typeTransformers = config.transformers[type] = [];
+      }
+
+      typeTransformers.push(function(coll, elem) {
+        if (_.isNull(isCollection) || (coll === isCollection)) {
+          return transformer(elem);
+        }
+        return elem;
+      });
+
+      return object;
+    };
+
+    object.extendCollection = function(route, fn) {
+      return object.addElementTransformer(route, true, fn);
+    };
+
+    object.extendModel = function(route, fn) {
+      return object.addElementTransformer(route, false, fn);
+    };
+
+    config.transformElem = function(elem, isCollection, route, Restangular, force) {
+      if (!force && !config.transformLocalElements && !elem[config.restangularFields.fromServer]) {
+        return elem;
+      }
+      var typeTransformers = config.transformers[route];
+      var changedElem = elem;
+      if (typeTransformers) {
+        _.each(typeTransformers, function(transformer) {
+          changedElem = transformer(isCollection, changedElem);
+        });
+      }
+      return config.onElemRestangularized(changedElem, isCollection, route, Restangular);
+    };
+
+    config.transformLocalElements = _.isUndefined(config.transformLocalElements) ?
+      false :
+      config.transformLocalElements;
+
+    object.setTransformOnlyServerElements = function(active) {
+      config.transformLocalElements = !active;
+    };
+
+    config.fullResponse = _.isUndefined(config.fullResponse) ? false : config.fullResponse;
+    object.setFullResponse = function(full) {
+      config.fullResponse = full;
+      return this;
+    };
+
+
+    //Internal values and functions
+    config.urlCreatorFactory = {};
+
+    /**
+     * Base URL Creator. Base prototype for everything related to it
+     **/
+
+     var BaseCreator = function() {
+     };
+
+     BaseCreator.prototype.setConfig = function(config) {
+       this.config = config;
+       return this;
+     };
+
+     BaseCreator.prototype.parentsArray = function(current) {
+      var parents = [];
+      while(current) {
+        parents.push(current);
+        current = current[this.config.restangularFields.parentResource];
+      }
+      return parents.reverse();
+    };
+
+    function RestangularResource(config, $http, url, configurer) {
+      var resource = {};
+      _.each(_.keys(configurer), function(key) {
+        var value = configurer[key];
+
+        // Add default parameters
+        value.params = _.extend({}, value.params, config.defaultRequestParams[value.method.toLowerCase()]);
+        // We don't want the ? if no params are there
+        if (_.isEmpty(value.params)) {
+          delete value.params;
+        }
+
+        if (config.isSafe(value.method)) {
+
+          resource[key] = function() {
+            return $http(_.extend(value, {
+              url: url
+            }));
+          };
+
+        } else {
+
+          resource[key] = function(data) {
+            return $http(_.extend(value, {
+              url: url,
+              data: data
+            }));
+          };
+
+        }
+      });
+
+      return resource;
+    }
+
+    BaseCreator.prototype.resource = function(current, $http, localHttpConfig, callHeaders, callParams, what, etag,operation) {
+
+      var params = _.defaults(callParams || {}, this.config.defaultRequestParams.common);
+      var headers = _.defaults(callHeaders || {}, this.config.defaultHeaders);
+
+      if (etag) {
+        if (!config.isSafe(operation)) {
+          headers['If-Match'] = etag;
+        } else {
+          headers['If-None-Match'] = etag;
+        }
+      }
+
+      var url = this.base(current);
+
+      if (what) {
+        var add = '';
+        if (!/\/$/.test(url)) {
+          add += '/';
+        }
+        add += what;
+        url += add;
+      }
+
+      if (this.config.suffix &&
+        url.indexOf(this.config.suffix, url.length - this.config.suffix.length) === -1 &&
+        !this.config.getUrlFromElem(current)) {
+          url += this.config.suffix;
+      }
+
+      current[this.config.restangularFields.httpConfig] = undefined;
+
+      return RestangularResource(this.config, $http, url, {
+        getList: this.config.withHttpValues(localHttpConfig,
+          {method: 'GET',
+          params: params,
+          headers: headers}),
+
+        get: this.config.withHttpValues(localHttpConfig,
+          {method: 'GET',
+          params: params,
+          headers: headers}),
+
+        jsonp: this.config.withHttpValues(localHttpConfig,
+          {method: 'jsonp',
+          params: params,
+          headers: headers}),
+
+        put: this.config.withHttpValues(localHttpConfig,
+          {method: 'PUT',
+          params: params,
+          headers: headers}),
+
+        post: this.config.withHttpValues(localHttpConfig,
+          {method: 'POST',
+          params: params,
+          headers: headers}),
+
+        remove: this.config.withHttpValues(localHttpConfig,
+          {method: 'DELETE',
+          params: params,
+          headers: headers}),
+
+        head: this.config.withHttpValues(localHttpConfig,
+          {method: 'HEAD',
+          params: params,
+          headers: headers}),
+
+        trace: this.config.withHttpValues(localHttpConfig,
+          {method: 'TRACE',
+          params: params,
+          headers: headers}),
+
+        options: this.config.withHttpValues(localHttpConfig,
+          {method: 'OPTIONS',
+          params: params,
+          headers: headers}),
+
+        patch: this.config.withHttpValues(localHttpConfig,
+          {method: 'PATCH',
+          params: params,
+          headers: headers})
+      });
+    };
+
+    /**
+     * This is the Path URL creator. It uses Path to show Hierarchy in the Rest API.
+     * This means that if you have an Account that then has a set of Buildings, a URL to a building
+     * would be /accounts/123/buildings/456
+    **/
+    var Path = function() {
+    };
+
+    Path.prototype = new BaseCreator();
+
+    Path.prototype.normalizeUrl = function (url){
+      var parts = /(http[s]?:\/\/)?(.*)?/.exec(url);
+      parts[2] = parts[2].replace(/[\\\/]+/g, '/');
+      return (typeof parts[1] !== 'undefined')? parts[1] + parts[2] : parts[2];
+    };
+
+    Path.prototype.base = function(current) {
+      var __this = this;
+      return  _.reduce(this.parentsArray(current), function(acum, elem) {
+        var elemUrl;
+        var elemSelfLink = __this.config.getUrlFromElem(elem);
+        if (elemSelfLink) {
+          if (__this.config.isAbsoluteUrl(elemSelfLink)) {
+            return elemSelfLink;
+          } else {
+            elemUrl = elemSelfLink;
+          }
+        } else {
+          elemUrl = elem[__this.config.restangularFields.route];
+
+          if (elem[__this.config.restangularFields.restangularCollection]) {
+            var ids = elem[__this.config.restangularFields.ids];
+            if (ids) {
+              elemUrl += '/' + ids.join(',');
+            }
+          } else {
+            var elemId;
+            if (__this.config.useCannonicalId) {
+              elemId = __this.config.getCannonicalIdFromElem(elem);
+            } else {
+              elemId = __this.config.getIdFromElem(elem);
+            }
+
+            if (config.isValidId(elemId) && !elem.singleOne) {
+              elemUrl += '/' + (__this.config.encodeIds ? encodeURIComponent(elemId) : elemId);
+            }
+          }
+        }
+        acum = acum.replace(/\/$/, '') + '/' + elemUrl;
+        return __this.normalizeUrl(acum);
+
+      }, this.config.baseUrl);
+    };
+
+
+
+    Path.prototype.fetchUrl = function(current, what) {
+      var baseUrl = this.base(current);
+      if (what) {
+        baseUrl += '/' + what;
+      }
+      return baseUrl;
+    };
+
+    Path.prototype.fetchRequestedUrl = function(current, what) {
+      var url = this.fetchUrl(current, what);
+      var params = current[config.restangularFields.reqParams];
+
+      // From here on and until the end of fetchRequestedUrl,
+      // the code has been kindly borrowed from angular.js
+      // The reason for such code bloating is coherence:
+      //   If the user were to use this for cache management, the
+      //   serialization of parameters would need to be identical
+      //   to the one done by angular for cache keys to match.
+      function sortedKeys(obj) {
+        var keys = [];
+        for (var key in obj) {
+          if (obj.hasOwnProperty(key)) {
+            keys.push(key);
+          }
+        }
+        return keys.sort();
+      }
+
+      function forEachSorted(obj, iterator, context) {
+        var keys = sortedKeys(obj);
+        for ( var i = 0; i < keys.length; i++) {
+          iterator.call(context, obj[keys[i]], keys[i]);
+        }
+        return keys;
+      }
+
+      function encodeUriQuery(val, pctEncodeSpaces) {
+        return encodeURIComponent(val).
+                   replace(/%40/gi, '@').
+                   replace(/%3A/gi, ':').
+                   replace(/%24/g, '$').
+                   replace(/%2C/gi, ',').
+                   replace(/%20/g, (pctEncodeSpaces ? '%20' : '+'));
+      }
+
+      if (!params) { return url + (this.config.suffix || ''); }
+
+      var parts = [];
+      forEachSorted(params, function(value, key) {
+        if (value === null || value === undefined) { return; }
+        if (!angular.isArray(value)) { value = [value]; }
+
+        angular.forEach(value, function(v) {
+          if (angular.isObject(v)) {
+            v = angular.toJson(v);
+          }
+          parts.push(encodeUriQuery(key) + '=' + encodeUriQuery(v));
+        });
+      });
+
+      return url + (this.config.suffix || '') + ((url.indexOf('?') === -1) ? '?' : '&') + parts.join('&');
+    };
+
+    config.urlCreatorFactory.path = Path;
+  };
+
+  var globalConfiguration = {};
+
+  Configurer.init(this, globalConfiguration);
+
+
+
+  this.$get = ['$http', '$q', function($http, $q) {
+
+    function createServiceForConfiguration(config) {
+      var service = {};
+
+      var urlHandler = new config.urlCreatorFactory[config.urlCreator]();
+      urlHandler.setConfig(config);
+
+      function restangularizeBase(parent, elem, route, reqParams, fromServer) {
+        elem[config.restangularFields.route] = route;
+        elem[config.restangularFields.getRestangularUrl] = _.bind(urlHandler.fetchUrl, urlHandler, elem);
+        elem[config.restangularFields.getRequestedUrl] = _.bind(urlHandler.fetchRequestedUrl, urlHandler, elem);
+        elem[config.restangularFields.addRestangularMethod] = _.bind(addRestangularMethodFunction, elem);
+        elem[config.restangularFields.clone] = _.bind(copyRestangularizedElement, elem, elem);
+        elem[config.restangularFields.reqParams] = _.isEmpty(reqParams) ? null : reqParams;
+        elem[config.restangularFields.withHttpConfig] = _.bind(withHttpConfig, elem);
+        elem[config.restangularFields.plain] = _.bind(stripRestangular, elem, elem);
+
+        // Tag element as restangularized
+        elem[config.restangularFields.restangularized] = true;
+
+        // RequestLess connection
+        elem[config.restangularFields.one] = _.bind(one, elem, elem);
+        elem[config.restangularFields.all] = _.bind(all, elem, elem);
+        elem[config.restangularFields.several] = _.bind(several, elem, elem);
+        elem[config.restangularFields.oneUrl] = _.bind(oneUrl, elem, elem);
+        elem[config.restangularFields.allUrl] = _.bind(allUrl, elem, elem);
+
+        elem[config.restangularFields.fromServer] = !!fromServer;
+
+        if (parent && config.shouldSaveParent(route)) {
+          var parentId = config.getIdFromElem(parent);
+          var parentUrl = config.getUrlFromElem(parent);
+
+          var restangularFieldsForParent = _.union(
+            _.values( _.pick(config.restangularFields, ['route', 'singleOne', 'parentResource']) ),
+            config.extraFields
+          );
+          var parentResource = _.pick(parent, restangularFieldsForParent);
+
+          if (config.isValidId(parentId)) {
+            config.setIdToElem(parentResource, parentId, route);
+          }
+          if (config.isValidId(parentUrl)) {
+            config.setUrlToElem(parentResource, parentUrl, route);
+          }
+
+          elem[config.restangularFields.parentResource] = parentResource;
+        } else {
+          elem[config.restangularFields.parentResource] = null;
+        }
+        return elem;
+      }
+
+      function one(parent, route, id, singleOne) {
+        var error;
+        if (_.isNumber(route) || _.isNumber(parent)) {
+          error = 'You\'re creating a Restangular entity with the number ';
+          error += 'instead of the route or the parent. For example, you can\'t call .one(12).';
+          throw new Error(error);
+        }
+        if (_.isUndefined(route)) {
+          error = 'You\'re creating a Restangular entity either without the path. ';
+          error += 'For example you can\'t call .one(). Please check if your arguments are valid.';
+          throw new Error(error);
+        }
+        var elem = {};
+        config.setIdToElem(elem, id, route);
+        config.setFieldToElem(config.restangularFields.singleOne, elem, singleOne);
+        return restangularizeElem(parent, elem , route, false);
+      }
+
+
+      function all(parent, route) {
+        return restangularizeCollection(parent, [] , route, false);
+      }
+
+      function several(parent, route /*, ids */) {
+        var collection = [];
+        collection[config.restangularFields.ids] = Array.prototype.splice.call(arguments, 2);
+        return restangularizeCollection(parent, collection , route, false);
+      }
+
+      function oneUrl(parent, route, url) {
+        if (!route) {
+          throw new Error('Route is mandatory when creating new Restangular objects.');
+        }
+        var elem = {};
+        config.setUrlToElem(elem, url, route);
+        return restangularizeElem(parent, elem , route, false);
+      }
+
+
+      function allUrl(parent, route, url) {
+        if (!route) {
+          throw new Error('Route is mandatory when creating new Restangular objects.');
+        }
+        var elem = {};
+        config.setUrlToElem(elem, url, route);
+        return restangularizeCollection(parent, elem , route, false);
+      }
+      // Promises
+      function restangularizePromise(promise, isCollection, valueToFill) {
+        promise.call = _.bind(promiseCall, promise);
+        promise.get = _.bind(promiseGet, promise);
+        promise[config.restangularFields.restangularCollection] = isCollection;
+        if (isCollection) {
+            promise.push = _.bind(promiseCall, promise, 'push');
+        }
+        promise.$object = valueToFill;
+        if (config.restangularizePromiseInterceptor) {
+          config.restangularizePromiseInterceptor(promise);
+        }
+        return promise;
+      }
+
+      function promiseCall(method) {
+        var deferred = $q.defer();
+        var callArgs = arguments;
+        var filledValue = {};
+        this.then(function(val) {
+          var params = Array.prototype.slice.call(callArgs, 1);
+          var func = val[method];
+          func.apply(val, params);
+          filledValue = val;
+          deferred.resolve(val);
+        });
+        return restangularizePromise(deferred.promise, this[config.restangularFields.restangularCollection], filledValue);
+      }
+
+      function promiseGet(what) {
+        var deferred = $q.defer();
+        var filledValue = {};
+        this.then(function(val) {
+          filledValue = val[what];
+          deferred.resolve(filledValue);
+        });
+        return restangularizePromise(deferred.promise, this[config.restangularFields.restangularCollection], filledValue);
+      }
+
+      function resolvePromise(deferred, response, data, filledValue) {
+        _.extend(filledValue, data);
+
+        // Trigger the full response interceptor.
+        if (config.fullResponse) {
+          return deferred.resolve(_.extend(response, {
+            data: data
+          }));
+        } else {
+          deferred.resolve(data);
+        }
+      }
+
+
+      // Elements
+      function stripRestangular(elem) {
+        if (_.isArray(elem)) {
+          var array = [];
+          _.each(elem, function(value) {
+              array.push(config.isRestangularized(value) ?  stripRestangular(value) : value);
+          });
+          return array;
+        } else {
+          return _.omit(elem, _.values(_.omit(config.restangularFields, 'id')));
+        }
+      }
+
+      function addCustomOperation(elem) {
+        elem[config.restangularFields.customOperation] = _.bind(customFunction, elem);
+        _.each(['put', 'post', 'get', 'delete'], function(oper) {
+          _.each(['do', 'custom'], function(alias) {
+            var callOperation = oper === 'delete' ? 'remove' : oper;
+            var name = alias + oper.toUpperCase();
+            var callFunction;
+
+            if (callOperation !== 'put' && callOperation !== 'post') {
+              callFunction = customFunction;
+            } else {
+              callFunction = function(operation, elem, path, params, headers) {
+                return _.bind(customFunction, this)(operation, path, params, headers, elem);
+              };
+            }
+            elem[name] = _.bind(callFunction, elem, callOperation);
+          });
+        });
+        elem[config.restangularFields.customGETLIST] = _.bind(fetchFunction, elem);
+        elem[config.restangularFields.doGETLIST] = elem[config.restangularFields.customGETLIST];
+      }
+
+      function copyRestangularizedElement(fromElement, toElement) {
+        var copiedElement = angular.copy(fromElement, toElement);
+        return restangularizeElem(copiedElement[config.restangularFields.parentResource],
+                copiedElement, copiedElement[config.restangularFields.route], true);
+      }
+
+      function restangularizeElem(parent, element, route, fromServer, collection, reqParams) {
+        var elem = config.onBeforeElemRestangularized(element, false, route);
+
+        var localElem = restangularizeBase(parent, elem, route, reqParams, fromServer);
+
+        if (config.useCannonicalId) {
+          localElem[config.restangularFields.cannonicalId] = config.getIdFromElem(localElem);
+        }
+
+        if (collection) {
+          localElem[config.restangularFields.getParentList] = function() {
+            return collection;
+          };
+        }
+
+        localElem[config.restangularFields.restangularCollection] = false;
+        localElem[config.restangularFields.get] = _.bind(getFunction, localElem);
+        localElem[config.restangularFields.getList] = _.bind(fetchFunction, localElem);
+        localElem[config.restangularFields.put] = _.bind(putFunction, localElem);
+        localElem[config.restangularFields.post] = _.bind(postFunction, localElem);
+        localElem[config.restangularFields.remove] = _.bind(deleteFunction, localElem);
+        localElem[config.restangularFields.head] = _.bind(headFunction, localElem);
+        localElem[config.restangularFields.trace] = _.bind(traceFunction, localElem);
+        localElem[config.restangularFields.options] = _.bind(optionsFunction, localElem);
+        localElem[config.restangularFields.patch] = _.bind(patchFunction, localElem);
+        localElem[config.restangularFields.save] = _.bind(save, localElem);
+
+        addCustomOperation(localElem);
+        return config.transformElem(localElem, false, route, service, true);
+      }
+
+      function restangularizeCollection(parent, element, route, fromServer, reqParams) {
+        var elem = config.onBeforeElemRestangularized(element, true, route);
+
+        var localElem = restangularizeBase(parent, elem, route, reqParams, fromServer);
+        localElem[config.restangularFields.restangularCollection] = true;
+        localElem[config.restangularFields.post] = _.bind(postFunction, localElem, null);
+        localElem[config.restangularFields.remove] = _.bind(deleteFunction, localElem);
+        localElem[config.restangularFields.head] = _.bind(headFunction, localElem);
+        localElem[config.restangularFields.trace] = _.bind(traceFunction, localElem);
+        localElem[config.restangularFields.putElement] = _.bind(putElementFunction, localElem);
+        localElem[config.restangularFields.options] = _.bind(optionsFunction, localElem);
+        localElem[config.restangularFields.patch] = _.bind(patchFunction, localElem);
+        localElem[config.restangularFields.get] = _.bind(getById, localElem);
+        localElem[config.restangularFields.getList] = _.bind(fetchFunction, localElem, null);
+
+        addCustomOperation(localElem);
+        return config.transformElem(localElem, true, route, service, true);
+      }
+
+      function restangularizeCollectionAndElements(parent, element, route) {
+        var collection = restangularizeCollection(parent, element, route, false);
+        _.each(collection, function(elem) {
+          restangularizeElem(parent, elem, route, false);
+        });
+        return collection;
+      }
+
+      function getById(id, reqParams, headers){
+        return this.customGET(id.toString(), reqParams, headers);
+      }
+
+      function putElementFunction(idx, params, headers) {
+        var __this = this;
+        var elemToPut = this[idx];
+        var deferred = $q.defer();
+        var filledArray = [];
+        filledArray = config.transformElem(filledArray, true, elemToPut[config.restangularFields.route], service);
+        elemToPut.put(params, headers).then(function(serverElem) {
+          var newArray = copyRestangularizedElement(__this);
+          newArray[idx] = serverElem;
+          filledArray = newArray;
+          deferred.resolve(newArray);
+        }, function(response) {
+          deferred.reject(response);
+        });
+
+        return restangularizePromise(deferred.promise, true, filledArray);
+      }
+
+      function parseResponse(resData, operation, route, fetchUrl, response, deferred) {
+        var data = config.responseExtractor(resData, operation, route, fetchUrl, response, deferred);
+        var etag = response.headers('ETag');
+        if (data && etag) {
+          data[config.restangularFields.etag] = etag;
+        }
+        return data;
+      }
+
+
+      function fetchFunction(what, reqParams, headers) {
+        var __this = this;
+        var deferred = $q.defer();
+        var operation = 'getList';
+        var url = urlHandler.fetchUrl(this, what);
+        var whatFetched = what || __this[config.restangularFields.route];
+
+        var request = config.fullRequestInterceptor(null, operation,
+            whatFetched, url, headers || {}, reqParams || {}, this[config.restangularFields.httpConfig] || {});
+
+        var filledArray = [];
+        filledArray = config.transformElem(filledArray, true, whatFetched, service);
+
+        var method = 'getList';
+
+        if (config.jsonp) {
+          method = 'jsonp';
+        }
+
+        var okCallback = function(response) {
+          var resData = response.data;
+          var fullParams = response.config.params;
+          var data = parseResponse(resData, operation, whatFetched, url, response, deferred);
+
+          // support empty response for getList() calls (some APIs respond with 204 and empty body)
+          if (_.isUndefined(data) || '' === data) {
+            data = [];
+          }
+          if (!_.isArray(data)) {
+            throw new Error('Response for getList SHOULD be an array and not an object or something else');
+          }
+          var processedData = _.map(data, function(elem) {
+            if (!__this[config.restangularFields.restangularCollection]) {
+              return restangularizeElem(__this, elem, what, true, data);
+            } else {
+              return restangularizeElem(__this[config.restangularFields.parentResource],
+                elem, __this[config.restangularFields.route], true, data);
+            }
+          });
+
+          processedData = _.extend(data, processedData);
+
+          if (!__this[config.restangularFields.restangularCollection]) {
+            resolvePromise(
+              deferred,
+              response,
+              restangularizeCollection(
+                __this,
+                processedData,
+                what,
+                true,
+                fullParams
+              ),
+              filledArray
+            );
+          } else {
+            resolvePromise(
+              deferred,
+              response,
+              restangularizeCollection(
+                __this[config.restangularFields.parentResource],
+                processedData,
+                __this[config.restangularFields.route],
+                true,
+                fullParams
+              ),
+              filledArray
+            );
+          }
+        };
+
+        urlHandler.resource(this, $http, request.httpConfig, request.headers, request.params, what,
+                this[config.restangularFields.etag], operation)[method]().then(okCallback, function error(response) {
+          if (response.status === 304 && __this[config.restangularFields.restangularCollection]) {
+            resolvePromise(deferred, response, __this, filledArray);
+          } else if ( _.every(config.errorInterceptors, function(cb) { return cb(response, deferred, okCallback) !== false; }) ) {
+            // triggered if no callback returns false
+            deferred.reject(response);
+          }
+        });
+
+        return restangularizePromise(deferred.promise, true, filledArray);
+      }
+
+      function withHttpConfig(httpConfig) {
+        this[config.restangularFields.httpConfig] = httpConfig;
+        return this;
+      }
+
+      function save(params, headers) {
+        if (this[config.restangularFields.fromServer]) {
+          return this[config.restangularFields.put](params, headers);
+        } else {
+          return _.bind(elemFunction, this)('post', undefined, params, undefined, headers);
+        }
+      }
+
+      function elemFunction(operation, what, params, obj, headers) {
+        var __this = this;
+        var deferred = $q.defer();
+        var resParams = params || {};
+        var route = what || this[config.restangularFields.route];
+        var fetchUrl = urlHandler.fetchUrl(this, what);
+
+        var callObj = obj || this;
+        // fallback to etag on restangular object (since for custom methods we probably don't explicitly specify the etag field)
+        var etag = callObj[config.restangularFields.etag] || (operation !== 'post' ? this[config.restangularFields.etag] : null);
+
+        if (_.isObject(callObj) && config.isRestangularized(callObj)) {
+          callObj = stripRestangular(callObj);
+        }
+        var request = config.fullRequestInterceptor(callObj, operation, route, fetchUrl,
+          headers || {}, resParams || {}, this[config.restangularFields.httpConfig] || {});
+
+        var filledObject = {};
+        filledObject = config.transformElem(filledObject, false, route, service);
+
+        var okCallback = function(response) {
+          var resData = response.data;
+          var fullParams = response.config.params;
+          var elem = parseResponse(resData, operation, route, fetchUrl, response, deferred);
+          if (elem) {
+
+            if (operation === 'post' && !__this[config.restangularFields.restangularCollection]) {
+              var data = restangularizeElem(
+                __this[config.restangularFields.parentResource],
+                elem,
+                route,
+                true,
+                null,
+                fullParams
+              );
+              resolvePromise(deferred, response, data, filledObject);
+            } else {
+              var data = restangularizeElem(
+                __this[config.restangularFields.parentResource],
+                elem,
+                __this[config.restangularFields.route],
+                true,
+                null,
+                fullParams
+              );
+
+              data[config.restangularFields.singleOne] = __this[config.restangularFields.singleOne];
+              resolvePromise(deferred, response, data, filledObject);
+            }
+
+          } else {
+            resolvePromise(deferred, response, undefined, filledObject);
+          }
+        };
+
+        var errorCallback = function(response) {
+          if (response.status === 304 && config.isSafe(operation)) {
+            resolvePromise(deferred, response, __this, filledObject);
+          } else if ( _.every(config.errorInterceptors, function(cb) { return cb(response, deferred, okCallback) !== false; }) ) {
+            // triggered if no callback returns false
+            deferred.reject(response);
+          }
+        };
+        // Overriding HTTP Method
+        var callOperation = operation;
+        var callHeaders = _.extend({}, request.headers);
+        var isOverrideOperation = config.isOverridenMethod(operation);
+        if (isOverrideOperation) {
+          callOperation = 'post';
+          callHeaders = _.extend(callHeaders, {'X-HTTP-Method-Override': operation === 'remove' ? 'DELETE' : operation.toUpperCase()});
+        } else if (config.jsonp && callOperation === 'get') {
+          callOperation = 'jsonp';
+        }
+
+        if (config.isSafe(operation)) {
+          if (isOverrideOperation) {
+            urlHandler.resource(this, $http, request.httpConfig, callHeaders, request.params,
+              what, etag, callOperation)[callOperation]({}).then(okCallback, errorCallback);
+          } else {
+            urlHandler.resource(this, $http, request.httpConfig, callHeaders, request.params,
+              what, etag, callOperation)[callOperation]().then(okCallback, errorCallback);
+          }
+        } else {
+          urlHandler.resource(this, $http, request.httpConfig, callHeaders, request.params,
+            what, etag, callOperation)[callOperation](request.element).then(okCallback, errorCallback);
+        }
+
+        return restangularizePromise(deferred.promise, false, filledObject);
+      }
+
+      function getFunction(params, headers) {
+        return _.bind(elemFunction, this)('get', undefined, params, undefined, headers);
+      }
+
+      function deleteFunction(params, headers) {
+        return _.bind(elemFunction, this)('remove', undefined, params, undefined, headers);
+      }
+
+      function putFunction(params, headers) {
+        return _.bind(elemFunction, this)('put', undefined, params, undefined, headers);
+      }
+
+      function postFunction(what, elem, params, headers) {
+        return _.bind(elemFunction, this)('post', what, params, elem, headers);
+      }
+
+      function headFunction(params, headers) {
+        return _.bind(elemFunction, this)('head', undefined, params, undefined, headers);
+      }
+
+      function traceFunction(params, headers) {
+        return _.bind(elemFunction, this)('trace', undefined, params, undefined, headers);
+      }
+
+      function optionsFunction(params, headers) {
+        return _.bind(elemFunction, this)('options', undefined, params, undefined, headers);
+      }
+
+      function patchFunction(elem, params, headers) {
+        return _.bind(elemFunction, this)('patch', undefined, params, elem, headers);
+      }
+
+      function customFunction(operation, path, params, headers, elem) {
+        return _.bind(elemFunction, this)(operation, path, params, elem, headers);
+      }
+
+      function addRestangularMethodFunction(name, operation, path, defaultParams, defaultHeaders, defaultElem) {
+        var bindedFunction;
+        if (operation === 'getList') {
+          bindedFunction = _.bind(fetchFunction, this, path);
+        } else {
+          bindedFunction = _.bind(customFunction, this, operation, path);
+        }
+
+        var createdFunction = function(params, headers, elem) {
+          var callParams = _.defaults({
+            params: params,
+            headers: headers,
+            elem: elem
+          }, {
+            params: defaultParams,
+            headers: defaultHeaders,
+            elem: defaultElem
+          });
+          return bindedFunction(callParams.params, callParams.headers, callParams.elem);
+        };
+
+        if (config.isSafe(operation)) {
+          this[name] = createdFunction;
+        } else {
+          this[name] = function(elem, params, headers) {
+            return createdFunction(params, headers, elem);
+          };
+        }
+      }
+
+      function withConfigurationFunction(configurer) {
+        var newConfig = angular.copy(_.omit(config, 'configuration'));
+        Configurer.init(newConfig, newConfig);
+        configurer(newConfig);
+        return createServiceForConfiguration(newConfig);
+      }
+
+      function toService(route, parent) {
+        var knownCollectionMethods = _.values(config.restangularFields);
+        var serv = {};
+        var collection = (parent || service).all(route);
+        serv.one = _.bind(one, (parent || service), parent, route);
+        serv.post = _.bind(collection.post, collection);
+        serv.getList = _.bind(collection.getList, collection);
+
+        for (var prop in collection) {
+          if (collection.hasOwnProperty(prop) && _.isFunction(collection[prop]) && !_.contains(knownCollectionMethods, prop)) {
+            serv[prop] = _.bind(collection[prop], collection);
+          }
+        }
+
+        return serv;
+      }
+
+
+      Configurer.init(service, config);
+
+      service.copy = _.bind(copyRestangularizedElement, service);
+
+      service.service = _.bind(toService, service);
+
+      service.withConfig = _.bind(withConfigurationFunction, service);
+
+      service.one = _.bind(one, service, null);
+
+      service.all = _.bind(all, service, null);
+
+      service.several = _.bind(several, service, null);
+
+      service.oneUrl = _.bind(oneUrl, service, null);
+
+      service.allUrl = _.bind(allUrl, service, null);
+
+      service.stripRestangular = _.bind(stripRestangular, service);
+
+      service.restangularizeElement = _.bind(restangularizeElem, service);
+
+      service.restangularizeCollection = _.bind(restangularizeCollectionAndElements, service);
+
+      return service;
+    }
+
+    return createServiceForConfiguration(globalConfiguration);
+  }];
+});
+
+})();
+
+//     Underscore.js 1.8.3
+//     http://underscorejs.org
+//     (c) 2009-2015 Jeremy Ashkenas, DocumentCloud and Investigative Reporters & Editors
+//     Underscore may be freely distributed under the MIT license.
+
+(function() {
+
+  // Baseline setup
+  // --------------
+
+  // Establish the root object, `window` in the browser, or `exports` on the server.
+  var root = this;
+
+  // Save the previous value of the `_` variable.
+  var previousUnderscore = root._;
+
+  // Save bytes in the minified (but not gzipped) version:
+  var ArrayProto = Array.prototype, ObjProto = Object.prototype, FuncProto = Function.prototype;
+
+  // Create quick reference variables for speed access to core prototypes.
+  var
+    push             = ArrayProto.push,
+    slice            = ArrayProto.slice,
+    toString         = ObjProto.toString,
+    hasOwnProperty   = ObjProto.hasOwnProperty;
+
+  // All **ECMAScript 5** native function implementations that we hope to use
+  // are declared here.
+  var
+    nativeIsArray      = Array.isArray,
+    nativeKeys         = Object.keys,
+    nativeBind         = FuncProto.bind,
+    nativeCreate       = Object.create;
+
+  // Naked function reference for surrogate-prototype-swapping.
+  var Ctor = function(){};
+
+  // Create a safe reference to the Underscore object for use below.
+  var _ = function(obj) {
+    if (obj instanceof _) return obj;
+    if (!(this instanceof _)) return new _(obj);
+    this._wrapped = obj;
+  };
+
+  // Export the Underscore object for **Node.js**, with
+  // backwards-compatibility for the old `require()` API. If we're in
+  // the browser, add `_` as a global object.
+  if (typeof exports !== 'undefined') {
+    if (typeof module !== 'undefined' && module.exports) {
+      exports = module.exports = _;
+    }
+    exports._ = _;
+  } else {
+    root._ = _;
+  }
+
+  // Current version.
+  _.VERSION = '1.8.3';
+
+  // Internal function that returns an efficient (for current engines) version
+  // of the passed-in callback, to be repeatedly applied in other Underscore
+  // functions.
+  var optimizeCb = function(func, context, argCount) {
+    if (context === void 0) return func;
+    switch (argCount == null ? 3 : argCount) {
+      case 1: return function(value) {
+        return func.call(context, value);
+      };
+      case 2: return function(value, other) {
+        return func.call(context, value, other);
+      };
+      case 3: return function(value, index, collection) {
+        return func.call(context, value, index, collection);
+      };
+      case 4: return function(accumulator, value, index, collection) {
+        return func.call(context, accumulator, value, index, collection);
+      };
+    }
+    return function() {
+      return func.apply(context, arguments);
+    };
+  };
+
+  // A mostly-internal function to generate callbacks that can be applied
+  // to each element in a collection, returning the desired result — either
+  // identity, an arbitrary callback, a property matcher, or a property accessor.
+  var cb = function(value, context, argCount) {
+    if (value == null) return _.identity;
+    if (_.isFunction(value)) return optimizeCb(value, context, argCount);
+    if (_.isObject(value)) return _.matcher(value);
+    return _.property(value);
+  };
+  _.iteratee = function(value, context) {
+    return cb(value, context, Infinity);
+  };
+
+  // An internal function for creating assigner functions.
+  var createAssigner = function(keysFunc, undefinedOnly) {
+    return function(obj) {
+      var length = arguments.length;
+      if (length < 2 || obj == null) return obj;
+      for (var index = 1; index < length; index++) {
+        var source = arguments[index],
+            keys = keysFunc(source),
+            l = keys.length;
+        for (var i = 0; i < l; i++) {
+          var key = keys[i];
+          if (!undefinedOnly || obj[key] === void 0) obj[key] = source[key];
+        }
+      }
+      return obj;
+    };
+  };
+
+  // An internal function for creating a new object that inherits from another.
+  var baseCreate = function(prototype) {
+    if (!_.isObject(prototype)) return {};
+    if (nativeCreate) return nativeCreate(prototype);
+    Ctor.prototype = prototype;
+    var result = new Ctor;
+    Ctor.prototype = null;
+    return result;
+  };
+
+  var property = function(key) {
+    return function(obj) {
+      return obj == null ? void 0 : obj[key];
+    };
+  };
+
+  // Helper for collection methods to determine whether a collection
+  // should be iterated as an array or as an object
+  // Related: http://people.mozilla.org/~jorendorff/es6-draft.html#sec-tolength
+  // Avoids a very nasty iOS 8 JIT bug on ARM-64. #2094
+  var MAX_ARRAY_INDEX = Math.pow(2, 53) - 1;
+  var getLength = property('length');
+  var isArrayLike = function(collection) {
+    var length = getLength(collection);
+    return typeof length == 'number' && length >= 0 && length <= MAX_ARRAY_INDEX;
+  };
+
+  // Collection Functions
+  // --------------------
+
+  // The cornerstone, an `each` implementation, aka `forEach`.
+  // Handles raw objects in addition to array-likes. Treats all
+  // sparse array-likes as if they were dense.
+  _.each = _.forEach = function(obj, iteratee, context) {
+    iteratee = optimizeCb(iteratee, context);
+    var i, length;
+    if (isArrayLike(obj)) {
+      for (i = 0, length = obj.length; i < length; i++) {
+        iteratee(obj[i], i, obj);
+      }
+    } else {
+      var keys = _.keys(obj);
+      for (i = 0, length = keys.length; i < length; i++) {
+        iteratee(obj[keys[i]], keys[i], obj);
+      }
+    }
+    return obj;
+  };
+
+  // Return the results of applying the iteratee to each element.
+  _.map = _.collect = function(obj, iteratee, context) {
+    iteratee = cb(iteratee, context);
+    var keys = !isArrayLike(obj) && _.keys(obj),
+        length = (keys || obj).length,
+        results = Array(length);
+    for (var index = 0; index < length; index++) {
+      var currentKey = keys ? keys[index] : index;
+      results[index] = iteratee(obj[currentKey], currentKey, obj);
+    }
+    return results;
+  };
+
+  // Create a reducing function iterating left or right.
+  function createReduce(dir) {
+    // Optimized iterator function as using arguments.length
+    // in the main function will deoptimize the, see #1991.
+    function iterator(obj, iteratee, memo, keys, index, length) {
+      for (; index >= 0 && index < length; index += dir) {
+        var currentKey = keys ? keys[index] : index;
+        memo = iteratee(memo, obj[currentKey], currentKey, obj);
+      }
+      return memo;
+    }
+
+    return function(obj, iteratee, memo, context) {
+      iteratee = optimizeCb(iteratee, context, 4);
+      var keys = !isArrayLike(obj) && _.keys(obj),
+          length = (keys || obj).length,
+          index = dir > 0 ? 0 : length - 1;
+      // Determine the initial value if none is provided.
+      if (arguments.length < 3) {
+        memo = obj[keys ? keys[index] : index];
+        index += dir;
+      }
+      return iterator(obj, iteratee, memo, keys, index, length);
+    };
+  }
+
+  // **Reduce** builds up a single result from a list of values, aka `inject`,
+  // or `foldl`.
+  _.reduce = _.foldl = _.inject = createReduce(1);
+
+  // The right-associative version of reduce, also known as `foldr`.
+  _.reduceRight = _.foldr = createReduce(-1);
+
+  // Return the first value which passes a truth test. Aliased as `detect`.
+  _.find = _.detect = function(obj, predicate, context) {
+    var key;
+    if (isArrayLike(obj)) {
+      key = _.findIndex(obj, predicate, context);
+    } else {
+      key = _.findKey(obj, predicate, context);
+    }
+    if (key !== void 0 && key !== -1) return obj[key];
+  };
+
+  // Return all the elements that pass a truth test.
+  // Aliased as `select`.
+  _.filter = _.select = function(obj, predicate, context) {
+    var results = [];
+    predicate = cb(predicate, context);
+    _.each(obj, function(value, index, list) {
+      if (predicate(value, index, list)) results.push(value);
+    });
+    return results;
+  };
+
+  // Return all the elements for which a truth test fails.
+  _.reject = function(obj, predicate, context) {
+    return _.filter(obj, _.negate(cb(predicate)), context);
+  };
+
+  // Determine whether all of the elements match a truth test.
+  // Aliased as `all`.
+  _.every = _.all = function(obj, predicate, context) {
+    predicate = cb(predicate, context);
+    var keys = !isArrayLike(obj) && _.keys(obj),
+        length = (keys || obj).length;
+    for (var index = 0; index < length; index++) {
+      var currentKey = keys ? keys[index] : index;
+      if (!predicate(obj[currentKey], currentKey, obj)) return false;
+    }
+    return true;
+  };
+
+  // Determine if at least one element in the object matches a truth test.
+  // Aliased as `any`.
+  _.some = _.any = function(obj, predicate, context) {
+    predicate = cb(predicate, context);
+    var keys = !isArrayLike(obj) && _.keys(obj),
+        length = (keys || obj).length;
+    for (var index = 0; index < length; index++) {
+      var currentKey = keys ? keys[index] : index;
+      if (predicate(obj[currentKey], currentKey, obj)) return true;
+    }
+    return false;
+  };
+
+  // Determine if the array or object contains a given item (using `===`).
+  // Aliased as `includes` and `include`.
+  _.contains = _.includes = _.include = function(obj, item, fromIndex, guard) {
+    if (!isArrayLike(obj)) obj = _.values(obj);
+    if (typeof fromIndex != 'number' || guard) fromIndex = 0;
+    return _.indexOf(obj, item, fromIndex) >= 0;
+  };
+
+  // Invoke a method (with arguments) on every item in a collection.
+  _.invoke = function(obj, method) {
+    var args = slice.call(arguments, 2);
+    var isFunc = _.isFunction(method);
+    return _.map(obj, function(value) {
+      var func = isFunc ? method : value[method];
+      return func == null ? func : func.apply(value, args);
+    });
+  };
+
+  // Convenience version of a common use case of `map`: fetching a property.
+  _.pluck = function(obj, key) {
+    return _.map(obj, _.property(key));
+  };
+
+  // Convenience version of a common use case of `filter`: selecting only objects
+  // containing specific `key:value` pairs.
+  _.where = function(obj, attrs) {
+    return _.filter(obj, _.matcher(attrs));
+  };
+
+  // Convenience version of a common use case of `find`: getting the first object
+  // containing specific `key:value` pairs.
+  _.findWhere = function(obj, attrs) {
+    return _.find(obj, _.matcher(attrs));
+  };
+
+  // Return the maximum element (or element-based computation).
+  _.max = function(obj, iteratee, context) {
+    var result = -Infinity, lastComputed = -Infinity,
+        value, computed;
+    if (iteratee == null && obj != null) {
+      obj = isArrayLike(obj) ? obj : _.values(obj);
+      for (var i = 0, length = obj.length; i < length; i++) {
+        value = obj[i];
+        if (value > result) {
+          result = value;
+        }
+      }
+    } else {
+      iteratee = cb(iteratee, context);
+      _.each(obj, function(value, index, list) {
+        computed = iteratee(value, index, list);
+        if (computed > lastComputed || computed === -Infinity && result === -Infinity) {
+          result = value;
+          lastComputed = computed;
+        }
+      });
+    }
+    return result;
+  };
+
+  // Return the minimum element (or element-based computation).
+  _.min = function(obj, iteratee, context) {
+    var result = Infinity, lastComputed = Infinity,
+        value, computed;
+    if (iteratee == null && obj != null) {
+      obj = isArrayLike(obj) ? obj : _.values(obj);
+      for (var i = 0, length = obj.length; i < length; i++) {
+        value = obj[i];
+        if (value < result) {
+          result = value;
+        }
+      }
+    } else {
+      iteratee = cb(iteratee, context);
+      _.each(obj, function(value, index, list) {
+        computed = iteratee(value, index, list);
+        if (computed < lastComputed || computed === Infinity && result === Infinity) {
+          result = value;
+          lastComputed = computed;
+        }
+      });
+    }
+    return result;
+  };
+
+  // Shuffle a collection, using the modern version of the
+  // [Fisher-Yates shuffle](http://en.wikipedia.org/wiki/Fisher–Yates_shuffle).
+  _.shuffle = function(obj) {
+    var set = isArrayLike(obj) ? obj : _.values(obj);
+    var length = set.length;
+    var shuffled = Array(length);
+    for (var index = 0, rand; index < length; index++) {
+      rand = _.random(0, index);
+      if (rand !== index) shuffled[index] = shuffled[rand];
+      shuffled[rand] = set[index];
+    }
+    return shuffled;
+  };
+
+  // Sample **n** random values from a collection.
+  // If **n** is not specified, returns a single random element.
+  // The internal `guard` argument allows it to work with `map`.
+  _.sample = function(obj, n, guard) {
+    if (n == null || guard) {
+      if (!isArrayLike(obj)) obj = _.values(obj);
+      return obj[_.random(obj.length - 1)];
+    }
+    return _.shuffle(obj).slice(0, Math.max(0, n));
+  };
+
+  // Sort the object's values by a criterion produced by an iteratee.
+  _.sortBy = function(obj, iteratee, context) {
+    iteratee = cb(iteratee, context);
+    return _.pluck(_.map(obj, function(value, index, list) {
+      return {
+        value: value,
+        index: index,
+        criteria: iteratee(value, index, list)
+      };
+    }).sort(function(left, right) {
+      var a = left.criteria;
+      var b = right.criteria;
+      if (a !== b) {
+        if (a > b || a === void 0) return 1;
+        if (a < b || b === void 0) return -1;
+      }
+      return left.index - right.index;
+    }), 'value');
+  };
+
+  // An internal function used for aggregate "group by" operations.
+  var group = function(behavior) {
+    return function(obj, iteratee, context) {
+      var result = {};
+      iteratee = cb(iteratee, context);
+      _.each(obj, function(value, index) {
+        var key = iteratee(value, index, obj);
+        behavior(result, value, key);
+      });
+      return result;
+    };
+  };
+
+  // Groups the object's values by a criterion. Pass either a string attribute
+  // to group by, or a function that returns the criterion.
+  _.groupBy = group(function(result, value, key) {
+    if (_.has(result, key)) result[key].push(value); else result[key] = [value];
+  });
+
+  // Indexes the object's values by a criterion, similar to `groupBy`, but for
+  // when you know that your index values will be unique.
+  _.indexBy = group(function(result, value, key) {
+    result[key] = value;
+  });
+
+  // Counts instances of an object that group by a certain criterion. Pass
+  // either a string attribute to count by, or a function that returns the
+  // criterion.
+  _.countBy = group(function(result, value, key) {
+    if (_.has(result, key)) result[key]++; else result[key] = 1;
+  });
+
+  // Safely create a real, live array from anything iterable.
+  _.toArray = function(obj) {
+    if (!obj) return [];
+    if (_.isArray(obj)) return slice.call(obj);
+    if (isArrayLike(obj)) return _.map(obj, _.identity);
+    return _.values(obj);
+  };
+
+  // Return the number of elements in an object.
+  _.size = function(obj) {
+    if (obj == null) return 0;
+    return isArrayLike(obj) ? obj.length : _.keys(obj).length;
+  };
+
+  // Split a collection into two arrays: one whose elements all satisfy the given
+  // predicate, and one whose elements all do not satisfy the predicate.
+  _.partition = function(obj, predicate, context) {
+    predicate = cb(predicate, context);
+    var pass = [], fail = [];
+    _.each(obj, function(value, key, obj) {
+      (predicate(value, key, obj) ? pass : fail).push(value);
+    });
+    return [pass, fail];
+  };
+
+  // Array Functions
+  // ---------------
+
+  // Get the first element of an array. Passing **n** will return the first N
+  // values in the array. Aliased as `head` and `take`. The **guard** check
+  // allows it to work with `_.map`.
+  _.first = _.head = _.take = function(array, n, guard) {
+    if (array == null) return void 0;
+    if (n == null || guard) return array[0];
+    return _.initial(array, array.length - n);
+  };
+
+  // Returns everything but the last entry of the array. Especially useful on
+  // the arguments object. Passing **n** will return all the values in
+  // the array, excluding the last N.
+  _.initial = function(array, n, guard) {
+    return slice.call(array, 0, Math.max(0, array.length - (n == null || guard ? 1 : n)));
+  };
+
+  // Get the last element of an array. Passing **n** will return the last N
+  // values in the array.
+  _.last = function(array, n, guard) {
+    if (array == null) return void 0;
+    if (n == null || guard) return array[array.length - 1];
+    return _.rest(array, Math.max(0, array.length - n));
+  };
+
+  // Returns everything but the first entry of the array. Aliased as `tail` and `drop`.
+  // Especially useful on the arguments object. Passing an **n** will return
+  // the rest N values in the array.
+  _.rest = _.tail = _.drop = function(array, n, guard) {
+    return slice.call(array, n == null || guard ? 1 : n);
+  };
+
+  // Trim out all falsy values from an array.
+  _.compact = function(array) {
+    return _.filter(array, _.identity);
+  };
+
+  // Internal implementation of a recursive `flatten` function.
+  var flatten = function(input, shallow, strict, startIndex) {
+    var output = [], idx = 0;
+    for (var i = startIndex || 0, length = getLength(input); i < length; i++) {
+      var value = input[i];
+      if (isArrayLike(value) && (_.isArray(value) || _.isArguments(value))) {
+        //flatten current level of array or arguments object
+        if (!shallow) value = flatten(value, shallow, strict);
+        var j = 0, len = value.length;
+        output.length += len;
+        while (j < len) {
+          output[idx++] = value[j++];
+        }
+      } else if (!strict) {
+        output[idx++] = value;
+      }
+    }
+    return output;
+  };
+
+  // Flatten out an array, either recursively (by default), or just one level.
+  _.flatten = function(array, shallow) {
+    return flatten(array, shallow, false);
+  };
+
+  // Return a version of the array that does not contain the specified value(s).
+  _.without = function(array) {
+    return _.difference(array, slice.call(arguments, 1));
+  };
+
+  // Produce a duplicate-free version of the array. If the array has already
+  // been sorted, you have the option of using a faster algorithm.
+  // Aliased as `unique`.
+  _.uniq = _.unique = function(array, isSorted, iteratee, context) {
+    if (!_.isBoolean(isSorted)) {
+      context = iteratee;
+      iteratee = isSorted;
+      isSorted = false;
+    }
+    if (iteratee != null) iteratee = cb(iteratee, context);
+    var result = [];
+    var seen = [];
+    for (var i = 0, length = getLength(array); i < length; i++) {
+      var value = array[i],
+          computed = iteratee ? iteratee(value, i, array) : value;
+      if (isSorted) {
+        if (!i || seen !== computed) result.push(value);
+        seen = computed;
+      } else if (iteratee) {
+        if (!_.contains(seen, computed)) {
+          seen.push(computed);
+          result.push(value);
+        }
+      } else if (!_.contains(result, value)) {
+        result.push(value);
+      }
+    }
+    return result;
+  };
+
+  // Produce an array that contains the union: each distinct element from all of
+  // the passed-in arrays.
+  _.union = function() {
+    return _.uniq(flatten(arguments, true, true));
+  };
+
+  // Produce an array that contains every item shared between all the
+  // passed-in arrays.
+  _.intersection = function(array) {
+    var result = [];
+    var argsLength = arguments.length;
+    for (var i = 0, length = getLength(array); i < length; i++) {
+      var item = array[i];
+      if (_.contains(result, item)) continue;
+      for (var j = 1; j < argsLength; j++) {
+        if (!_.contains(arguments[j], item)) break;
+      }
+      if (j === argsLength) result.push(item);
+    }
+    return result;
+  };
+
+  // Take the difference between one array and a number of other arrays.
+  // Only the elements present in just the first array will remain.
+  _.difference = function(array) {
+    var rest = flatten(arguments, true, true, 1);
+    return _.filter(array, function(value){
+      return !_.contains(rest, value);
+    });
+  };
+
+  // Zip together multiple lists into a single array -- elements that share
+  // an index go together.
+  _.zip = function() {
+    return _.unzip(arguments);
+  };
+
+  // Complement of _.zip. Unzip accepts an array of arrays and groups
+  // each array's elements on shared indices
+  _.unzip = function(array) {
+    var length = array && _.max(array, getLength).length || 0;
+    var result = Array(length);
+
+    for (var index = 0; index < length; index++) {
+      result[index] = _.pluck(array, index);
+    }
+    return result;
+  };
+
+  // Converts lists into objects. Pass either a single array of `[key, value]`
+  // pairs, or two parallel arrays of the same length -- one of keys, and one of
+  // the corresponding values.
+  _.object = function(list, values) {
+    var result = {};
+    for (var i = 0, length = getLength(list); i < length; i++) {
+      if (values) {
+        result[list[i]] = values[i];
+      } else {
+        result[list[i][0]] = list[i][1];
+      }
+    }
+    return result;
+  };
+
+  // Generator function to create the findIndex and findLastIndex functions
+  function createPredicateIndexFinder(dir) {
+    return function(array, predicate, context) {
+      predicate = cb(predicate, context);
+      var length = getLength(array);
+      var index = dir > 0 ? 0 : length - 1;
+      for (; index >= 0 && index < length; index += dir) {
+        if (predicate(array[index], index, array)) return index;
+      }
+      return -1;
+    };
+  }
+
+  // Returns the first index on an array-like that passes a predicate test
+  _.findIndex = createPredicateIndexFinder(1);
+  _.findLastIndex = createPredicateIndexFinder(-1);
+
+  // Use a comparator function to figure out the smallest index at which
+  // an object should be inserted so as to maintain order. Uses binary search.
+  _.sortedIndex = function(array, obj, iteratee, context) {
+    iteratee = cb(iteratee, context, 1);
+    var value = iteratee(obj);
+    var low = 0, high = getLength(array);
+    while (low < high) {
+      var mid = Math.floor((low + high) / 2);
+      if (iteratee(array[mid]) < value) low = mid + 1; else high = mid;
+    }
+    return low;
+  };
+
+  // Generator function to create the indexOf and lastIndexOf functions
+  function createIndexFinder(dir, predicateFind, sortedIndex) {
+    return function(array, item, idx) {
+      var i = 0, length = getLength(array);
+      if (typeof idx == 'number') {
+        if (dir > 0) {
+            i = idx >= 0 ? idx : Math.max(idx + length, i);
+        } else {
+            length = idx >= 0 ? Math.min(idx + 1, length) : idx + length + 1;
+        }
+      } else if (sortedIndex && idx && length) {
+        idx = sortedIndex(array, item);
+        return array[idx] === item ? idx : -1;
+      }
+      if (item !== item) {
+        idx = predicateFind(slice.call(array, i, length), _.isNaN);
+        return idx >= 0 ? idx + i : -1;
+      }
+      for (idx = dir > 0 ? i : length - 1; idx >= 0 && idx < length; idx += dir) {
+        if (array[idx] === item) return idx;
+      }
+      return -1;
+    };
+  }
+
+  // Return the position of the first occurrence of an item in an array,
+  // or -1 if the item is not included in the array.
+  // If the array is large and already in sort order, pass `true`
+  // for **isSorted** to use binary search.
+  _.indexOf = createIndexFinder(1, _.findIndex, _.sortedIndex);
+  _.lastIndexOf = createIndexFinder(-1, _.findLastIndex);
+
+  // Generate an integer Array containing an arithmetic progression. A port of
+  // the native Python `range()` function. See
+  // [the Python documentation](http://docs.python.org/library/functions.html#range).
+  _.range = function(start, stop, step) {
+    if (stop == null) {
+      stop = start || 0;
+      start = 0;
+    }
+    step = step || 1;
+
+    var length = Math.max(Math.ceil((stop - start) / step), 0);
+    var range = Array(length);
+
+    for (var idx = 0; idx < length; idx++, start += step) {
+      range[idx] = start;
+    }
+
+    return range;
+  };
+
+  // Function (ahem) Functions
+  // ------------------
+
+  // Determines whether to execute a function as a constructor
+  // or a normal function with the provided arguments
+  var executeBound = function(sourceFunc, boundFunc, context, callingContext, args) {
+    if (!(callingContext instanceof boundFunc)) return sourceFunc.apply(context, args);
+    var self = baseCreate(sourceFunc.prototype);
+    var result = sourceFunc.apply(self, args);
+    if (_.isObject(result)) return result;
+    return self;
+  };
+
+  // Create a function bound to a given object (assigning `this`, and arguments,
+  // optionally). Delegates to **ECMAScript 5**'s native `Function.bind` if
+  // available.
+  _.bind = function(func, context) {
+    if (nativeBind && func.bind === nativeBind) return nativeBind.apply(func, slice.call(arguments, 1));
+    if (!_.isFunction(func)) throw new TypeError('Bind must be called on a function');
+    var args = slice.call(arguments, 2);
+    var bound = function() {
+      return executeBound(func, bound, context, this, args.concat(slice.call(arguments)));
+    };
+    return bound;
+  };
+
+  // Partially apply a function by creating a version that has had some of its
+  // arguments pre-filled, without changing its dynamic `this` context. _ acts
+  // as a placeholder, allowing any combination of arguments to be pre-filled.
+  _.partial = function(func) {
+    var boundArgs = slice.call(arguments, 1);
+    var bound = function() {
+      var position = 0, length = boundArgs.length;
+      var args = Array(length);
+      for (var i = 0; i < length; i++) {
+        args[i] = boundArgs[i] === _ ? arguments[position++] : boundArgs[i];
+      }
+      while (position < arguments.length) args.push(arguments[position++]);
+      return executeBound(func, bound, this, this, args);
+    };
+    return bound;
+  };
+
+  // Bind a number of an object's methods to that object. Remaining arguments
+  // are the method names to be bound. Useful for ensuring that all callbacks
+  // defined on an object belong to it.
+  _.bindAll = function(obj) {
+    var i, length = arguments.length, key;
+    if (length <= 1) throw new Error('bindAll must be passed function names');
+    for (i = 1; i < length; i++) {
+      key = arguments[i];
+      obj[key] = _.bind(obj[key], obj);
+    }
+    return obj;
+  };
+
+  // Memoize an expensive function by storing its results.
+  _.memoize = function(func, hasher) {
+    var memoize = function(key) {
+      var cache = memoize.cache;
+      var address = '' + (hasher ? hasher.apply(this, arguments) : key);
+      if (!_.has(cache, address)) cache[address] = func.apply(this, arguments);
+      return cache[address];
+    };
+    memoize.cache = {};
+    return memoize;
+  };
+
+  // Delays a function for the given number of milliseconds, and then calls
+  // it with the arguments supplied.
+  _.delay = function(func, wait) {
+    var args = slice.call(arguments, 2);
+    return setTimeout(function(){
+      return func.apply(null, args);
+    }, wait);
+  };
+
+  // Defers a function, scheduling it to run after the current call stack has
+  // cleared.
+  _.defer = _.partial(_.delay, _, 1);
+
+  // Returns a function, that, when invoked, will only be triggered at most once
+  // during a given window of time. Normally, the throttled function will run
+  // as much as it can, without ever going more than once per `wait` duration;
+  // but if you'd like to disable the execution on the leading edge, pass
+  // `{leading: false}`. To disable execution on the trailing edge, ditto.
+  _.throttle = function(func, wait, options) {
+    var context, args, result;
+    var timeout = null;
+    var previous = 0;
+    if (!options) options = {};
+    var later = function() {
+      previous = options.leading === false ? 0 : _.now();
+      timeout = null;
+      result = func.apply(context, args);
+      if (!timeout) context = args = null;
+    };
+    return function() {
+      var now = _.now();
+      if (!previous && options.leading === false) previous = now;
+      var remaining = wait - (now - previous);
+      context = this;
+      args = arguments;
+      if (remaining <= 0 || remaining > wait) {
+        if (timeout) {
+          clearTimeout(timeout);
+          timeout = null;
+        }
+        previous = now;
+        result = func.apply(context, args);
+        if (!timeout) context = args = null;
+      } else if (!timeout && options.trailing !== false) {
+        timeout = setTimeout(later, remaining);
+      }
+      return result;
+    };
+  };
+
+  // Returns a function, that, as long as it continues to be invoked, will not
+  // be triggered. The function will be called after it stops being called for
+  // N milliseconds. If `immediate` is passed, trigger the function on the
+  // leading edge, instead of the trailing.
+  _.debounce = function(func, wait, immediate) {
+    var timeout, args, context, timestamp, result;
+
+    var later = function() {
+      var last = _.now() - timestamp;
+
+      if (last < wait && last >= 0) {
+        timeout = setTimeout(later, wait - last);
+      } else {
+        timeout = null;
+        if (!immediate) {
+          result = func.apply(context, args);
+          if (!timeout) context = args = null;
+        }
+      }
+    };
+
+    return function() {
+      context = this;
+      args = arguments;
+      timestamp = _.now();
+      var callNow = immediate && !timeout;
+      if (!timeout) timeout = setTimeout(later, wait);
+      if (callNow) {
+        result = func.apply(context, args);
+        context = args = null;
+      }
+
+      return result;
+    };
+  };
+
+  // Returns the first function passed as an argument to the second,
+  // allowing you to adjust arguments, run code before and after, and
+  // conditionally execute the original function.
+  _.wrap = function(func, wrapper) {
+    return _.partial(wrapper, func);
+  };
+
+  // Returns a negated version of the passed-in predicate.
+  _.negate = function(predicate) {
+    return function() {
+      return !predicate.apply(this, arguments);
+    };
+  };
+
+  // Returns a function that is the composition of a list of functions, each
+  // consuming the return value of the function that follows.
+  _.compose = function() {
+    var args = arguments;
+    var start = args.length - 1;
+    return function() {
+      var i = start;
+      var result = args[start].apply(this, arguments);
+      while (i--) result = args[i].call(this, result);
+      return result;
+    };
+  };
+
+  // Returns a function that will only be executed on and after the Nth call.
+  _.after = function(times, func) {
+    return function() {
+      if (--times < 1) {
+        return func.apply(this, arguments);
+      }
+    };
+  };
+
+  // Returns a function that will only be executed up to (but not including) the Nth call.
+  _.before = function(times, func) {
+    var memo;
+    return function() {
+      if (--times > 0) {
+        memo = func.apply(this, arguments);
+      }
+      if (times <= 1) func = null;
+      return memo;
+    };
+  };
+
+  // Returns a function that will be executed at most one time, no matter how
+  // often you call it. Useful for lazy initialization.
+  _.once = _.partial(_.before, 2);
+
+  // Object Functions
+  // ----------------
+
+  // Keys in IE < 9 that won't be iterated by `for key in ...` and thus missed.
+  var hasEnumBug = !{toString: null}.propertyIsEnumerable('toString');
+  var nonEnumerableProps = ['valueOf', 'isPrototypeOf', 'toString',
+                      'propertyIsEnumerable', 'hasOwnProperty', 'toLocaleString'];
+
+  function collectNonEnumProps(obj, keys) {
+    var nonEnumIdx = nonEnumerableProps.length;
+    var constructor = obj.constructor;
+    var proto = (_.isFunction(constructor) && constructor.prototype) || ObjProto;
+
+    // Constructor is a special case.
+    var prop = 'constructor';
+    if (_.has(obj, prop) && !_.contains(keys, prop)) keys.push(prop);
+
+    while (nonEnumIdx--) {
+      prop = nonEnumerableProps[nonEnumIdx];
+      if (prop in obj && obj[prop] !== proto[prop] && !_.contains(keys, prop)) {
+        keys.push(prop);
+      }
+    }
+  }
+
+  // Retrieve the names of an object's own properties.
+  // Delegates to **ECMAScript 5**'s native `Object.keys`
+  _.keys = function(obj) {
+    if (!_.isObject(obj)) return [];
+    if (nativeKeys) return nativeKeys(obj);
+    var keys = [];
+    for (var key in obj) if (_.has(obj, key)) keys.push(key);
+    // Ahem, IE < 9.
+    if (hasEnumBug) collectNonEnumProps(obj, keys);
+    return keys;
+  };
+
+  // Retrieve all the property names of an object.
+  _.allKeys = function(obj) {
+    if (!_.isObject(obj)) return [];
+    var keys = [];
+    for (var key in obj) keys.push(key);
+    // Ahem, IE < 9.
+    if (hasEnumBug) collectNonEnumProps(obj, keys);
+    return keys;
+  };
+
+  // Retrieve the values of an object's properties.
+  _.values = function(obj) {
+    var keys = _.keys(obj);
+    var length = keys.length;
+    var values = Array(length);
+    for (var i = 0; i < length; i++) {
+      values[i] = obj[keys[i]];
+    }
+    return values;
+  };
+
+  // Returns the results of applying the iteratee to each element of the object
+  // In contrast to _.map it returns an object
+  _.mapObject = function(obj, iteratee, context) {
+    iteratee = cb(iteratee, context);
+    var keys =  _.keys(obj),
+          length = keys.length,
+          results = {},
+          currentKey;
+      for (var index = 0; index < length; index++) {
+        currentKey = keys[index];
+        results[currentKey] = iteratee(obj[currentKey], currentKey, obj);
+      }
+      return results;
+  };
+
+  // Convert an object into a list of `[key, value]` pairs.
+  _.pairs = function(obj) {
+    var keys = _.keys(obj);
+    var length = keys.length;
+    var pairs = Array(length);
+    for (var i = 0; i < length; i++) {
+      pairs[i] = [keys[i], obj[keys[i]]];
+    }
+    return pairs;
+  };
+
+  // Invert the keys and values of an object. The values must be serializable.
+  _.invert = function(obj) {
+    var result = {};
+    var keys = _.keys(obj);
+    for (var i = 0, length = keys.length; i < length; i++) {
+      result[obj[keys[i]]] = keys[i];
+    }
+    return result;
+  };
+
+  // Return a sorted list of the function names available on the object.
+  // Aliased as `methods`
+  _.functions = _.methods = function(obj) {
+    var names = [];
+    for (var key in obj) {
+      if (_.isFunction(obj[key])) names.push(key);
+    }
+    return names.sort();
+  };
+
+  // Extend a given object with all the properties in passed-in object(s).
+  _.extend = createAssigner(_.allKeys);
+
+  // Assigns a given object with all the own properties in the passed-in object(s)
+  // (https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/Object/assign)
+  _.extendOwn = _.assign = createAssigner(_.keys);
+
+  // Returns the first key on an object that passes a predicate test
+  _.findKey = function(obj, predicate, context) {
+    predicate = cb(predicate, context);
+    var keys = _.keys(obj), key;
+    for (var i = 0, length = keys.length; i < length; i++) {
+      key = keys[i];
+      if (predicate(obj[key], key, obj)) return key;
+    }
+  };
+
+  // Return a copy of the object only containing the whitelisted properties.
+  _.pick = function(object, oiteratee, context) {
+    var result = {}, obj = object, iteratee, keys;
+    if (obj == null) return result;
+    if (_.isFunction(oiteratee)) {
+      keys = _.allKeys(obj);
+      iteratee = optimizeCb(oiteratee, context);
+    } else {
+      keys = flatten(arguments, false, false, 1);
+      iteratee = function(value, key, obj) { return key in obj; };
+      obj = Object(obj);
+    }
+    for (var i = 0, length = keys.length; i < length; i++) {
+      var key = keys[i];
+      var value = obj[key];
+      if (iteratee(value, key, obj)) result[key] = value;
+    }
+    return result;
+  };
+
+   // Return a copy of the object without the blacklisted properties.
+  _.omit = function(obj, iteratee, context) {
+    if (_.isFunction(iteratee)) {
+      iteratee = _.negate(iteratee);
+    } else {
+      var keys = _.map(flatten(arguments, false, false, 1), String);
+      iteratee = function(value, key) {
+        return !_.contains(keys, key);
+      };
+    }
+    return _.pick(obj, iteratee, context);
+  };
+
+  // Fill in a given object with default properties.
+  _.defaults = createAssigner(_.allKeys, true);
+
+  // Creates an object that inherits from the given prototype object.
+  // If additional properties are provided then they will be added to the
+  // created object.
+  _.create = function(prototype, props) {
+    var result = baseCreate(prototype);
+    if (props) _.extendOwn(result, props);
+    return result;
+  };
+
+  // Create a (shallow-cloned) duplicate of an object.
+  _.clone = function(obj) {
+    if (!_.isObject(obj)) return obj;
+    return _.isArray(obj) ? obj.slice() : _.extend({}, obj);
+  };
+
+  // Invokes interceptor with the obj, and then returns obj.
+  // The primary purpose of this method is to "tap into" a method chain, in
+  // order to perform operations on intermediate results within the chain.
+  _.tap = function(obj, interceptor) {
+    interceptor(obj);
+    return obj;
+  };
+
+  // Returns whether an object has a given set of `key:value` pairs.
+  _.isMatch = function(object, attrs) {
+    var keys = _.keys(attrs), length = keys.length;
+    if (object == null) return !length;
+    var obj = Object(object);
+    for (var i = 0; i < length; i++) {
+      var key = keys[i];
+      if (attrs[key] !== obj[key] || !(key in obj)) return false;
+    }
+    return true;
+  };
+
+
+  // Internal recursive comparison function for `isEqual`.
+  var eq = function(a, b, aStack, bStack) {
+    // Identical objects are equal. `0 === -0`, but they aren't identical.
+    // See the [Harmony `egal` proposal](http://wiki.ecmascript.org/doku.php?id=harmony:egal).
+    if (a === b) return a !== 0 || 1 / a === 1 / b;
+    // A strict comparison is necessary because `null == undefined`.
+    if (a == null || b == null) return a === b;
+    // Unwrap any wrapped objects.
+    if (a instanceof _) a = a._wrapped;
+    if (b instanceof _) b = b._wrapped;
+    // Compare `[[Class]]` names.
+    var className = toString.call(a);
+    if (className !== toString.call(b)) return false;
+    switch (className) {
+      // Strings, numbers, regular expressions, dates, and booleans are compared by value.
+      case '[object RegExp]':
+      // RegExps are coerced to strings for comparison (Note: '' + /a/i === '/a/i')
+      case '[object String]':
+        // Primitives and their corresponding object wrappers are equivalent; thus, `"5"` is
+        // equivalent to `new String("5")`.
+        return '' + a === '' + b;
+      case '[object Number]':
+        // `NaN`s are equivalent, but non-reflexive.
+        // Object(NaN) is equivalent to NaN
+        if (+a !== +a) return +b !== +b;
+        // An `egal` comparison is performed for other numeric values.
+        return +a === 0 ? 1 / +a === 1 / b : +a === +b;
+      case '[object Date]':
+      case '[object Boolean]':
+        // Coerce dates and booleans to numeric primitive values. Dates are compared by their
+        // millisecond representations. Note that invalid dates with millisecond representations
+        // of `NaN` are not equivalent.
+        return +a === +b;
+    }
+
+    var areArrays = className === '[object Array]';
+    if (!areArrays) {
+      if (typeof a != 'object' || typeof b != 'object') return false;
+
+      // Objects with different constructors are not equivalent, but `Object`s or `Array`s
+      // from different frames are.
+      var aCtor = a.constructor, bCtor = b.constructor;
+      if (aCtor !== bCtor && !(_.isFunction(aCtor) && aCtor instanceof aCtor &&
+                               _.isFunction(bCtor) && bCtor instanceof bCtor)
+                          && ('constructor' in a && 'constructor' in b)) {
+        return false;
+      }
+    }
+    // Assume equality for cyclic structures. The algorithm for detecting cyclic
+    // structures is adapted from ES 5.1 section 15.12.3, abstract operation `JO`.
+
+    // Initializing stack of traversed objects.
+    // It's done here since we only need them for objects and arrays comparison.
+    aStack = aStack || [];
+    bStack = bStack || [];
+    var length = aStack.length;
+    while (length--) {
+      // Linear search. Performance is inversely proportional to the number of
+      // unique nested structures.
+      if (aStack[length] === a) return bStack[length] === b;
+    }
+
+    // Add the first object to the stack of traversed objects.
+    aStack.push(a);
+    bStack.push(b);
+
+    // Recursively compare objects and arrays.
+    if (areArrays) {
+      // Compare array lengths to determine if a deep comparison is necessary.
+      length = a.length;
+      if (length !== b.length) return false;
+      // Deep compare the contents, ignoring non-numeric properties.
+      while (length--) {
+        if (!eq(a[length], b[length], aStack, bStack)) return false;
+      }
+    } else {
+      // Deep compare objects.
+      var keys = _.keys(a), key;
+      length = keys.length;
+      // Ensure that both objects contain the same number of properties before comparing deep equality.
+      if (_.keys(b).length !== length) return false;
+      while (length--) {
+        // Deep compare each member
+        key = keys[length];
+        if (!(_.has(b, key) && eq(a[key], b[key], aStack, bStack))) return false;
+      }
+    }
+    // Remove the first object from the stack of traversed objects.
+    aStack.pop();
+    bStack.pop();
+    return true;
+  };
+
+  // Perform a deep comparison to check if two objects are equal.
+  _.isEqual = function(a, b) {
+    return eq(a, b);
+  };
+
+  // Is a given array, string, or object empty?
+  // An "empty" object has no enumerable own-properties.
+  _.isEmpty = function(obj) {
+    if (obj == null) return true;
+    if (isArrayLike(obj) && (_.isArray(obj) || _.isString(obj) || _.isArguments(obj))) return obj.length === 0;
+    return _.keys(obj).length === 0;
+  };
+
+  // Is a given value a DOM element?
+  _.isElement = function(obj) {
+    return !!(obj && obj.nodeType === 1);
+  };
+
+  // Is a given value an array?
+  // Delegates to ECMA5's native Array.isArray
+  _.isArray = nativeIsArray || function(obj) {
+    return toString.call(obj) === '[object Array]';
+  };
+
+  // Is a given variable an object?
+  _.isObject = function(obj) {
+    var type = typeof obj;
+    return type === 'function' || type === 'object' && !!obj;
+  };
+
+  // Add some isType methods: isArguments, isFunction, isString, isNumber, isDate, isRegExp, isError.
+  _.each(['Arguments', 'Function', 'String', 'Number', 'Date', 'RegExp', 'Error'], function(name) {
+    _['is' + name] = function(obj) {
+      return toString.call(obj) === '[object ' + name + ']';
+    };
+  });
+
+  // Define a fallback version of the method in browsers (ahem, IE < 9), where
+  // there isn't any inspectable "Arguments" type.
+  if (!_.isArguments(arguments)) {
+    _.isArguments = function(obj) {
+      return _.has(obj, 'callee');
+    };
+  }
+
+  // Optimize `isFunction` if appropriate. Work around some typeof bugs in old v8,
+  // IE 11 (#1621), and in Safari 8 (#1929).
+  if (typeof /./ != 'function' && typeof Int8Array != 'object') {
+    _.isFunction = function(obj) {
+      return typeof obj == 'function' || false;
+    };
+  }
+
+  // Is a given object a finite number?
+  _.isFinite = function(obj) {
+    return isFinite(obj) && !isNaN(parseFloat(obj));
+  };
+
+  // Is the given value `NaN`? (NaN is the only number which does not equal itself).
+  _.isNaN = function(obj) {
+    return _.isNumber(obj) && obj !== +obj;
+  };
+
+  // Is a given value a boolean?
+  _.isBoolean = function(obj) {
+    return obj === true || obj === false || toString.call(obj) === '[object Boolean]';
+  };
+
+  // Is a given value equal to null?
+  _.isNull = function(obj) {
+    return obj === null;
+  };
+
+  // Is a given variable undefined?
+  _.isUndefined = function(obj) {
+    return obj === void 0;
+  };
+
+  // Shortcut function for checking if an object has a given property directly
+  // on itself (in other words, not on a prototype).
+  _.has = function(obj, key) {
+    return obj != null && hasOwnProperty.call(obj, key);
+  };
+
+  // Utility Functions
+  // -----------------
+
+  // Run Underscore.js in *noConflict* mode, returning the `_` variable to its
+  // previous owner. Returns a reference to the Underscore object.
+  _.noConflict = function() {
+    root._ = previousUnderscore;
+    return this;
+  };
+
+  // Keep the identity function around for default iteratees.
+  _.identity = function(value) {
+    return value;
+  };
+
+  // Predicate-generating functions. Often useful outside of Underscore.
+  _.constant = function(value) {
+    return function() {
+      return value;
+    };
+  };
+
+  _.noop = function(){};
+
+  _.property = property;
+
+  // Generates a function for a given object that returns a given property.
+  _.propertyOf = function(obj) {
+    return obj == null ? function(){} : function(key) {
+      return obj[key];
+    };
+  };
+
+  // Returns a predicate for checking whether an object has a given set of
+  // `key:value` pairs.
+  _.matcher = _.matches = function(attrs) {
+    attrs = _.extendOwn({}, attrs);
+    return function(obj) {
+      return _.isMatch(obj, attrs);
+    };
+  };
+
+  // Run a function **n** times.
+  _.times = function(n, iteratee, context) {
+    var accum = Array(Math.max(0, n));
+    iteratee = optimizeCb(iteratee, context, 1);
+    for (var i = 0; i < n; i++) accum[i] = iteratee(i);
+    return accum;
+  };
+
+  // Return a random integer between min and max (inclusive).
+  _.random = function(min, max) {
+    if (max == null) {
+      max = min;
+      min = 0;
+    }
+    return min + Math.floor(Math.random() * (max - min + 1));
+  };
+
+  // A (possibly faster) way to get the current timestamp as an integer.
+  _.now = Date.now || function() {
+    return new Date().getTime();
+  };
+
+   // List of HTML entities for escaping.
+  var escapeMap = {
+    '&': '&amp;',
+    '<': '&lt;',
+    '>': '&gt;',
+    '"': '&quot;',
+    "'": '&#x27;',
+    '`': '&#x60;'
+  };
+  var unescapeMap = _.invert(escapeMap);
+
+  // Functions for escaping and unescaping strings to/from HTML interpolation.
+  var createEscaper = function(map) {
+    var escaper = function(match) {
+      return map[match];
+    };
+    // Regexes for identifying a key that needs to be escaped
+    var source = '(?:' + _.keys(map).join('|') + ')';
+    var testRegexp = RegExp(source);
+    var replaceRegexp = RegExp(source, 'g');
+    return function(string) {
+      string = string == null ? '' : '' + string;
+      return testRegexp.test(string) ? string.replace(replaceRegexp, escaper) : string;
+    };
+  };
+  _.escape = createEscaper(escapeMap);
+  _.unescape = createEscaper(unescapeMap);
+
+  // If the value of the named `property` is a function then invoke it with the
+  // `object` as context; otherwise, return it.
+  _.result = function(object, property, fallback) {
+    var value = object == null ? void 0 : object[property];
+    if (value === void 0) {
+      value = fallback;
+    }
+    return _.isFunction(value) ? value.call(object) : value;
+  };
+
+  // Generate a unique integer id (unique within the entire client session).
+  // Useful for temporary DOM ids.
+  var idCounter = 0;
+  _.uniqueId = function(prefix) {
+    var id = ++idCounter + '';
+    return prefix ? prefix + id : id;
+  };
+
+  // By default, Underscore uses ERB-style template delimiters, change the
+  // following template settings to use alternative delimiters.
+  _.templateSettings = {
+    evaluate    : /<%([\s\S]+?)%>/g,
+    interpolate : /<%=([\s\S]+?)%>/g,
+    escape      : /<%-([\s\S]+?)%>/g
+  };
+
+  // When customizing `templateSettings`, if you don't want to define an
+  // interpolation, evaluation or escaping regex, we need one that is
+  // guaranteed not to match.
+  var noMatch = /(.)^/;
+
+  // Certain characters need to be escaped so that they can be put into a
+  // string literal.
+  var escapes = {
+    "'":      "'",
+    '\\':     '\\',
+    '\r':     'r',
+    '\n':     'n',
+    '\u2028': 'u2028',
+    '\u2029': 'u2029'
+  };
+
+  var escaper = /\\|'|\r|\n|\u2028|\u2029/g;
+
+  var escapeChar = function(match) {
+    return '\\' + escapes[match];
+  };
+
+  // JavaScript micro-templating, similar to John Resig's implementation.
+  // Underscore templating handles arbitrary delimiters, preserves whitespace,
+  // and correctly escapes quotes within interpolated code.
+  // NB: `oldSettings` only exists for backwards compatibility.
+  _.template = function(text, settings, oldSettings) {
+    if (!settings && oldSettings) settings = oldSettings;
+    settings = _.defaults({}, settings, _.templateSettings);
+
+    // Combine delimiters into one regular expression via alternation.
+    var matcher = RegExp([
+      (settings.escape || noMatch).source,
+      (settings.interpolate || noMatch).source,
+      (settings.evaluate || noMatch).source
+    ].join('|') + '|$', 'g');
+
+    // Compile the template source, escaping string literals appropriately.
+    var index = 0;
+    var source = "__p+='";
+    text.replace(matcher, function(match, escape, interpolate, evaluate, offset) {
+      source += text.slice(index, offset).replace(escaper, escapeChar);
+      index = offset + match.length;
+
+      if (escape) {
+        source += "'+\n((__t=(" + escape + "))==null?'':_.escape(__t))+\n'";
+      } else if (interpolate) {
+        source += "'+\n((__t=(" + interpolate + "))==null?'':__t)+\n'";
+      } else if (evaluate) {
+        source += "';\n" + evaluate + "\n__p+='";
+      }
+
+      // Adobe VMs need the match returned to produce the correct offest.
+      return match;
+    });
+    source += "';\n";
+
+    // If a variable is not specified, place data values in local scope.
+    if (!settings.variable) source = 'with(obj||{}){\n' + source + '}\n';
+
+    source = "var __t,__p='',__j=Array.prototype.join," +
+      "print=function(){__p+=__j.call(arguments,'');};\n" +
+      source + 'return __p;\n';
+
+    try {
+      var render = new Function(settings.variable || 'obj', '_', source);
+    } catch (e) {
+      e.source = source;
+      throw e;
+    }
+
+    var template = function(data) {
+      return render.call(this, data, _);
+    };
+
+    // Provide the compiled source as a convenience for precompilation.
+    var argument = settings.variable || 'obj';
+    template.source = 'function(' + argument + '){\n' + source + '}';
+
+    return template;
+  };
+
+  // Add a "chain" function. Start chaining a wrapped Underscore object.
+  _.chain = function(obj) {
+    var instance = _(obj);
+    instance._chain = true;
+    return instance;
+  };
+
+  // OOP
+  // ---------------
+  // If Underscore is called as a function, it returns a wrapped object that
+  // can be used OO-style. This wrapper holds altered versions of all the
+  // underscore functions. Wrapped objects may be chained.
+
+  // Helper function to continue chaining intermediate results.
+  var result = function(instance, obj) {
+    return instance._chain ? _(obj).chain() : obj;
+  };
+
+  // Add your own custom functions to the Underscore object.
+  _.mixin = function(obj) {
+    _.each(_.functions(obj), function(name) {
+      var func = _[name] = obj[name];
+      _.prototype[name] = function() {
+        var args = [this._wrapped];
+        push.apply(args, arguments);
+        return result(this, func.apply(_, args));
+      };
+    });
+  };
+
+  // Add all of the Underscore functions to the wrapper object.
+  _.mixin(_);
+
+  // Add all mutator Array functions to the wrapper.
+  _.each(['pop', 'push', 'reverse', 'shift', 'sort', 'splice', 'unshift'], function(name) {
+    var method = ArrayProto[name];
+    _.prototype[name] = function() {
+      var obj = this._wrapped;
+      method.apply(obj, arguments);
+      if ((name === 'shift' || name === 'splice') && obj.length === 0) delete obj[0];
+      return result(this, obj);
+    };
+  });
+
+  // Add all accessor Array functions to the wrapper.
+  _.each(['concat', 'join', 'slice'], function(name) {
+    var method = ArrayProto[name];
+    _.prototype[name] = function() {
+      return result(this, method.apply(this._wrapped, arguments));
+    };
+  });
+
+  // Extracts the result from a wrapped and chained object.
+  _.prototype.value = function() {
+    return this._wrapped;
+  };
+
+  // Provide unwrapping proxy for some methods used in engine operations
+  // such as arithmetic and JSON stringification.
+  _.prototype.valueOf = _.prototype.toJSON = _.prototype.value;
+
+  _.prototype.toString = function() {
+    return '' + this._wrapped;
+  };
+
+  // AMD registration happens at the end for compatibility with AMD loaders
+  // that may not enforce next-turn semantics on modules. Even though general
+  // practice for AMD registration is to be anonymous, underscore registers
+  // as a named module because, like jQuery, it is a base library that is
+  // popular enough to be bundled in a third party lib, but not be part of
+  // an AMD load request. Those cases could generate an error when an
+  // anonymous define() is called outside of a loader request.
+  if (typeof define === 'function' && define.amd) {
+    define('underscore', [], function() {
+      return _;
+    });
+  }
+}.call(this));
+
 'use strict';
 
 /* App Module */
@@ -51999,6 +55126,8 @@ var app = angular.module('App', [
   'blockUI',
   'ngSanitize',
   'ngAnimate',
+  'restangular',
+  'ngStorage',
 ]);
 
 // ui.route
@@ -52007,16 +55136,35 @@ app.config([
   '$stateProvider',
   '$urlRouterProvider',
   'navItemsProvider',
-  function($httpProvider, $stateProvider, $urlRouterProvider, navItemsProvider) {
+  'RestangularProvider',
+  '$compileProvider',
+  function($httpProvider, $stateProvider, $urlRouterProvider, navItemsProvider, RestangularProvider, $compileProvider) {
 
+    $compileProvider.debugInfoEnabled(false);
+
+    // ngRoute
     $urlRouterProvider
+      //
+      // Выставляем стейт по умолчанию
+      .otherwise('/home');
 
-    //.when('/c?id', '/contacts/:id')
-    //.when('/user/:id', '/contacts/:id')
+    // ui-route
+    $stateProvider
 
-    //
-    // Выставляем стейт по умолчанию
-    .otherwise('/home');
+      .state('auth', {
+        url: '/auth',
+        abstract: true,
+        template: '<ui-view>',
+        controller: 'AuthController',
+      })
+
+      .state('auth.login', {
+        url: '/login',
+        templateUrl: './partials/auth/login.html',
+        data: {
+          'noLogin': true
+        }
+      });
 
     //
     // Подключаем стейты для навигационного бара
@@ -52026,36 +55174,62 @@ app.config([
       $stateProvider.state(item.state, item);
     });
 
+    RestangularProvider.setBaseUrl("http://localhost:8000");
+
+    /*RestangularConfigurer.addFullRequestInterceptor(function (element, operation, route, url, headers, params, httpConfig) {
+
+        if (operation === 'get'){
+            $log.warn("RestangularProvider: call to get");
+            params.ts= new Date();
+        }
+
+        return {
+            element: element,
+            headers: headers,
+            params: params,
+            httpConfig: httpConfig
+        };
+
+      });*/
+
 }]);
 
-/*
-// ngRoute
-app.config([
-  '$routeProvider',
-  'navItemsProvider',
-  function ($routeProvider, navItemsProvider) {
-
-    var navItems = navItemsProvider.$get().items();
-
-    angular.forEach(navItems, function (item) {
-      $routeProvider.when(item.url, item);
-    });
-
-    $routeProvider.otherwise({
-      redirectTo: '/'
-    });
-}]);*/
-
 app.run([
+    '$log',
     '$rootScope',
     '$state',
     '$stateParams',
-    function ($rootScope, $state, $stateParams) {
+    'authService',
+    function ($log, $rootScope, $state, $stateParams, authService) {
 
       $rootScope.$state = $state;
       $rootScope.$stateParams = $stateParams;
+      $rootScope.user = null;
 
-      console.log('App start');
+      var statesThatDontRequireAuth = ['auth.login'];
+
+      var isGoingToStateInStatesThatDontRequireAuth = function (state) {
+          return ['auth.login'].some(function (noAuthRoute) {
+              return state === noAuthRoute;
+          });
+      };
+
+      // Проверяем авторизацию
+      $rootScope.$on('$stateChangeStart',
+        function (event, toState, toParams, fromState, fromParams) {
+
+          if(!isGoingToStateInStatesThatDontRequireAuth(toState.name) && !authService.isAuthenticated()){
+            $log.log('Access is denied');
+            event.preventDefault();
+            $state.go('auth.login', {notify: false});
+          } else {
+            $log.log('Access is allowed');
+          }
+
+        }
+      );
+
+      $log.log('App start');
 
     }
 ]);
@@ -52072,6 +55246,29 @@ app.directive('navbar', [
         replace: true
     };
 
+}]);
+app.factory('TransactionsStore', [
+    'Restangular',
+    function(Restangular) {
+      return {
+        transactions: [],
+        loadTransactions: function() {
+          this.transactions = Restangular.all('transactions').getList().$object;
+        },
+        addTransaction: function(transaction) {
+          var that = this;
+          return Restangular.all('transactions').post({transaction: transaction}).then(function() {
+            that.transactions.push(transaction);
+          })
+        },
+        sum: function() {
+          var sum = 0;
+          this.transactions.forEach(function(el) {
+            sum += parseFloat(el.amount);
+          })
+          return sum;
+        }
+      }
 }]);
 app.factory('helloWorldFromFactory', function() {
     return {
@@ -52102,6 +55299,73 @@ app.factory('navItems', function(){
     }
   }
 });
+app.service('authService', [
+  '$injector',
+  '$timeout',
+  '$localStorage',
+  '$sessionStorage',
+  '$state',
+  function($injector, $timeout, $localStorage, $sessionStorage, $state) {
+    "use strict";
+
+    var userMap = Object.create(null, {
+        admin: {
+            value: {
+                firstName: 'Dear',
+                lastName: 'Friend',
+                role: 'admin',
+                password: 'secret',
+            }
+        }
+    });
+
+    var currentUser = $sessionStorage.$default({user: 'undefined'}).user;
+
+    var authenticated;
+    if(currentUser !== 'undefined')
+    {
+      authenticated = true;
+    } else {
+      authenticated = false;
+    }
+
+    this.authenticate = function (name, password) {
+        var promise = $timeout(function () {
+            var user = currentUser || 'undefined';
+            if (typeof userMap[name] !== 'undefined' && userMap[name]['password'] === password) {
+                authenticated = true;
+                $sessionStorage.user = userMap[name];
+                return user;
+            } else {
+                debugger;
+                delete $sessionStorage.user;
+                $timeout.cancel(promise);
+            }
+        }, 300);
+        return promise;
+    };
+
+    this.isAuthenticated = function () {
+        return authenticated;
+    };
+
+    this.getCurrentUser = function () {
+        if (authenticated) {
+            return currentUser;
+        }
+    };
+
+    this.logOut = function () {
+        authenticated = false;
+        currentUser = null;
+    };
+
+    this.getUser= function(name){
+
+    }
+
+  }
+  ]);
 app.service('helloWorldFromService', function() {
     this.sayHello = function() {
         return "Hello, service!"
@@ -52137,23 +55401,66 @@ app.provider('runtimeStates', [
 }]);
 'use strict';
 
+/* Controller AuthController */
+
+app.controller('AuthController', [
+  '$log',
+  '$scope',
+  '$controller',
+  '$routeParams',
+  '$state',
+  'authService',
+  function($log, $scope, $controller, $routeParams, $state, authService) {
+
+    $log.log('Init AuthController');
+
+    $scope.user = $scope.user || {};
+    $scope.loginForm = {submitDisabled: false};
+    $scope.hint = true;
+
+    if(authService.isAuthenticated())
+    {
+      $state.go('home');
+    }
+
+    $scope.submit = function () {
+        $scope.loginForm.submitDisabled = true;
+        authService.authenticate($scope.user.name, $scope.user.password).then(function (user) {
+            $log.debug('success:', $scope.user);
+            $state.go('home');
+        }, function (reject) {
+            $log.debug('invalid credentials:', reject);
+            $scope.hint = true;
+        })['finally'](function () {
+            $scope.loginForm.submitDisabled = false;
+        });
+    };
+
+}]);
+'use strict';
+
 /* Controller IndexController */
 
 app.controller('IndexController', [
+  '$log',
   '$scope',
+  '$controller',
+  '$routeParams',
   'helloWorld',
   'helloWorldFromFactory',
   'helloWorldFromService',
-  function($scope, helloWorld, helloWorldFromFactory, helloWorldFromService) {
+  function($log, $scope, $controller, $routeParams, helloWorld, helloWorldFromFactory, helloWorldFromService) {
 
-    console.log('Init IndexController');
+    angular.extend(this, $controller('AuthController', {$scope: $scope, $routeParams: $routeParams}));
+
+    $log.log('Init IndexController');
 
     $scope.hellos = [
         helloWorld.sayHello(),
         helloWorldFromFactory.sayHello(),
         helloWorldFromService.sayHello()];
 
-    console.log($scope.hellos);
+    $log.log($scope.hellos);
 
 }]);
 'use strict';
@@ -52211,26 +55518,59 @@ app.controller('NavbarController', [
     };
 
 }]);
+app.controller('TransactionsController', [
+'$scope',
+'TransactionsStore',
+function($scope, TransactionsStore) {
+
+  TransactionsStore.loadTransactions();
+
+  this.addTransaction = function() {
+    TransactionsStore.addTransaction(this.newTransaction);
+    this.resetTransaction();
+  }
+
+  this.resetTransaction = function() {
+    this.newTransaction = {
+      amount: 0.0,
+      date: "1993-02-01",
+      description: null
+    }
+  }
+  this.transactions = TransactionsStore.transactions;
+
+  this.resetTransaction();
+}]);
 'use strict';
 
 /* Controller DocumetsController */
 
 app.controller('DocumetsController', [
+  '$log',
   '$scope',
+  '$controller',
   '$routeParams',
-  function($scope, $routeParams) {
+  function($log, $scope, $controller, $routeParams) {
 
-    console.log('Init DocumetsController');
+    debugger;
+
+    $log.log('Init DocumetsController');
 
 }]);
+
 'use strict';
 
 /* Controller HomeController */
 
 app.controller('HomeController', [
+  '$log',
   '$scope',
-  function($scope) {
+  '$controller',
+  '$routeParams',
+  function($log, $scope, $controller, $routeParams) {
 
-    console.log('Init HomeController');
+    debugger;
+
+    $log.log('Init HomeController');
 
 }]);
