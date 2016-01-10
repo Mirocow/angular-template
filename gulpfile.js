@@ -55,8 +55,8 @@ gulp.task('app-js', function () {
 });
 
 gulp.task('js', function () {
-  gulp.run('bootstrap-fonts');
   gulp.run('vendors-js');
+  gulp.run('app-js');
 });
 
 gulp.task('vendors-css', function () {
