@@ -32,7 +32,7 @@ $ npm build
  * http://ui-grid.info/docs/#/tutorial
 * https://github.com/gsklee/ngStorage (use for authorization)
 
-### not used
+### unused
 
 * https://github.com/angular/material
  * https://material.angularjs.org/HEAD/getting-started
